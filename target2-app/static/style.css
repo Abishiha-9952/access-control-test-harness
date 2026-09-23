@@ -1,0 +1,306 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #07111f;
+    color: #ffffff;
+    min-height: 100vh;
+}
+
+/* Navigation */
+
+nav {
+    height: 72px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 8%;
+    border-bottom: 1px solid #1d2b3d;
+    background: #091522;
+}
+
+.logo {
+    font-size: 22px;
+    font-weight: bold;
+}
+
+.nav-links {
+    display: flex;
+    gap: 30px;
+}
+
+.nav-links a {
+    color: #b8c5d6;
+    text-decoration: none;
+}
+
+.nav-links a:hover {
+    color: #ffffff;
+}
+
+/* Hero */
+
+.hero {
+    min-height: 600px;
+    display: flex;
+    align-items: center;
+    padding: 80px 8%;
+
+    background:
+        radial-gradient(
+            circle at 75% 40%,
+            #163a5c 0,
+            #07111f 45%
+        );
+}
+
+.hero-content {
+    max-width: 750px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 8px 14px;
+    border: 1px solid #2d6088;
+    border-radius: 20px;
+    color: #69b9ff;
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin-bottom: 25px;
+}
+
+h1 {
+    font-size: 64px;
+    line-height: 1.05;
+    margin-bottom: 25px;
+}
+
+h1 span {
+    color: #55b6ff;
+}
+
+.hero-content p {
+    color: #aebdce;
+    font-size: 18px;
+    line-height: 1.7;
+    max-width: 650px;
+}
+
+/* Buttons */
+
+.buttons {
+    margin-top: 35px;
+    display: flex;
+    gap: 15px;
+}
+
+.primary-btn,
+.secondary-btn {
+    padding: 14px 24px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.primary-btn {
+    background: #2196f3;
+    color: white;
+}
+
+.secondary-btn {
+    border: 1px solid #38536d;
+    color: white;
+}
+
+.primary-btn:hover {
+    background: #1976d2;
+}
+
+.secondary-btn:hover {
+    background: #122437;
+}
+
+/* Feature cards */
+
+.features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
+    padding: 70px 8%;
+    background: #091522;
+}
+
+.feature-card {
+    padding: 30px;
+    border: 1px solid #1d2b3d;
+    border-radius: 12px;
+    background: #0d1b2a;
+}
+
+.feature-card h3 {
+    margin-bottom: 12px;
+}
+
+.feature-card p {
+    color: #9eafc2;
+    line-height: 1.6;
+}
+
+/* Footer */
+
+footer {
+    text-align: center;
+    padding: 30px;
+    color: #708399;
+    border-top: 1px solid #1d2b3d;
+}
+
+/* Mobile */
+
+@media (max-width: 800px) {
+
+    h1 {
+        font-size: 44px;
+    }
+
+    .features {
+        grid-template-columns: 1fr;
+    }
+
+    nav {
+        padding: 0 5%;
+    }
+
+    .hero {
+        padding: 60px 5%;
+    }
+}
+
+/* Login Page */
+
+.login-section {
+    min-height: 650px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 20px;
+
+    background:
+        radial-gradient(
+            circle at 50% 30%,
+            #163a5c 0,
+            #07111f 55%
+        );
+}
+
+.login-card {
+    width: 100%;
+    max-width: 450px;
+    padding: 40px;
+
+    background: #0d1b2a;
+
+    border: 1px solid #1d344b;
+    border-radius: 16px;
+
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.login-card h1 {
+    font-size: 36px;
+    margin: 20px 0 10px;
+}
+
+.login-description {
+    color: #9eafc2;
+    margin-bottom: 30px;
+    line-height: 1.6;
+}
+
+.login-card form {
+    display: flex;
+    flex-direction: column;
+}
+
+.login-card label {
+    margin-bottom: 8px;
+    color: #d5dfeb;
+    font-size: 14px;
+}
+
+.login-card input {
+    width: 100%;
+    padding: 14px;
+
+    margin-bottom: 20px;
+
+    background: #07111f;
+    color: white;
+
+    border: 1px solid #29425b;
+    border-radius: 8px;
+
+    outline: none;
+
+    font-size: 15px;
+}
+
+.login-card input:focus {
+    border-color: #2196f3;
+}
+
+.login-btn {
+    padding: 14px;
+
+    border: none;
+    border-radius: 8px;
+
+    background: #2196f3;
+    color: white;
+
+    font-size: 16px;
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+.login-btn:hover {
+    background: #1976d2;
+}
+
+.error-message {
+    padding: 12px;
+    margin-bottom: 20px;
+
+    background: #3b1820;
+    border: 1px solid #71303b;
+
+    color: #ff9ba8;
+
+    border-radius: 8px;
+}
+
+.demo-info {
+    margin-top: 25px;
+    padding: 18px;
+
+    background: #091522;
+
+    border: 1px solid #1d2b3d;
+    border-radius: 8px;
+
+    color: #9eafc2;
+}
+
+.demo-info strong {
+    color: white;
+}
+
+.demo-info p {
+    margin-top: 8px;
+    font-size: 14px;
+}
