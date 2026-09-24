@@ -1,26 +1,31 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-
-import jwt
 from functools import wraps
-from datetime import datetime, timedelta, timezone
+import jwt
+import datetime
+import os
 
 
 app = Flask(__name__)
 
-app.config["SECRET_KEY"] = "mysecretkey"
-app.config["JWT_SECRET_KEY"] = "change-this-jwt-secret"
-app.config["JWT_EXPIRATION_HOURS"] = 1
+# --------------------------------------------------
+# Configuration
+# --------------------------------------------------
+
+app.config["SECRET_KEY"] = "change-this-session-secret"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///users.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+JWT_SECRET_KEY = "change-this-jwt-secret"
+JWT_EXPIRATION_HOURS = 1
 
 db = SQLAlchemy(app)
 
 
-# ============================================================
-# DATABASE MODEL
-# ============================================================
+# --------------------------------------------------
+# Database Model
+# --------------------------------------------------
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -28,77 +33,72 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default="user", nullable=False)
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "email": self.email,
+            "role": self.role
+        }
 
-# ============================================================
-# JWT TOKEN GENERATION
-# ============================================================
+
+# --------------------------------------------------
+# JWT Functions
+# --------------------------------------------------
 
 def generate_token(user):
-
     payload = {
         "user_id": user.id,
         "email": user.email,
         "role": user.role,
-        "exp": datetime.now(timezone.utc) + timedelta(
-            hours=app.config["JWT_EXPIRATION_HOURS"]
-        )
+        "exp": datetime.datetime.now(datetime.timezone.utc)
+              + datetime.timedelta(hours=JWT_EXPIRATION_HOURS)
     }
 
-    return jwt.encode(
-        payload,
-        app.config["JWT_SECRET_KEY"],
-        algorithm="HS256"
-    )
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm="HS256")
 
-
-# ============================================================
-# JWT AUTHENTICATION DECORATOR
-# ============================================================
 
 def jwt_required(f):
-
     @wraps(f)
     def decorated(*args, **kwargs):
 
-        token = request.headers.get("Authorization")
+        auth_header = request.headers.get("Authorization")
 
-        if not token:
+        if not auth_header:
             return jsonify({
                 "error": "Authorization token required"
             }), 401
 
-        if not token.startswith("Bearer "):
-            return jsonify({
-                "error": "Invalid authorization format"
-            }), 401
-
-        token = token.split(" ", 1)[1]
-
         try:
+            parts = auth_header.split()
+
+            if len(parts) != 2 or parts[0].lower() != "bearer":
+                return jsonify({
+                    "error": "Invalid authorization header"
+                }), 401
+
+            token = parts[1]
 
             payload = jwt.decode(
                 token,
-                app.config["JWT_SECRET_KEY"],
+                JWT_SECRET_KEY,
                 algorithms=["HS256"]
             )
 
-            current_user = User.query.get(payload["user_id"])
+            user = db.session.get(User, payload["user_id"])
 
-            if not current_user:
+            if not user:
                 return jsonify({
                     "error": "User not found"
                 }), 401
 
-            request.current_user = current_user
+            request.current_user = user
 
         except jwt.ExpiredSignatureError:
-
             return jsonify({
                 "error": "Token expired"
             }), 401
 
         except jwt.InvalidTokenError:
-
             return jsonify({
                 "error": "Invalid token"
             }), 401
@@ -108,92 +108,73 @@ def jwt_required(f):
     return decorated
 
 
-# ============================================================
-# CREATE DATABASE
-# ============================================================
+# --------------------------------------------------
+# Initialize Database
+# --------------------------------------------------
 
 with app.app_context():
     db.create_all()
 
 
-# ============================================================
-# HOME
-# ============================================================
+# --------------------------------------------------
+# Home
+# --------------------------------------------------
 
 @app.route("/")
 def home():
-    return redirect(url_for("login"))
+    return jsonify({
+        "message": "Access Control Test Harness API",
+        "status": "running"
+    })
 
 
-# ============================================================
-# REGISTER
-# ============================================================
+# --------------------------------------------------
+# Register
+# --------------------------------------------------
 
-@app.route("/register", methods=["GET", "POST"])
+@app.route("/register", methods=["POST"])
 def register():
 
-    if request.method == "POST":
+    data = request.get_json() or {}
 
-        email = request.form["email"]
-        password = request.form["password"]
-        confirm = request.form["confirm"]
+    email = data.get("email")
+    password = data.get("password")
 
-        if not email:
-            flash("Email is required")
-            return redirect(url_for("register"))
+    if not email or not password:
+        return jsonify({
+            "error": "Email and password are required"
+        }), 400
 
-        if not password:
-            flash("Password is required")
-            return redirect(url_for("register"))
+    existing_user = User.query.filter_by(email=email).first()
 
-        if not confirm:
-            flash("Confirm Password is required")
-            return redirect(url_for("register"))
+    if existing_user:
+        return jsonify({
+            "error": "User already exists"
+        }), 409
 
-        if len(password) < 8:
-            flash("Password must be at least 8 characters")
-            return redirect(url_for("register"))
+    user = User(
+        email=email,
+        password_hash=generate_password_hash(password),
+        role="user"
+    )
 
-        if password != confirm:
-            flash("Passwords do not match")
-            return redirect(url_for("register"))
+    db.session.add(user)
+    db.session.commit()
 
-        existing_user = User.query.filter_by(email=email).first()
-
-        if existing_user:
-            flash("Email already exists")
-            return redirect(url_for("register"))
-
-        password_hash = generate_password_hash(password)
-
-        new_user = User(
-            email=email,
-            password_hash=password_hash
-        )
-
-        db.session.add(new_user)
-        db.session.commit()
-
-        flash("Registration Successful")
-
-        return redirect(url_for("login"))
-
-    return render_template("register.html")
+    return jsonify({
+        "message": "User registered successfully",
+        "user": user.to_dict()
+    }), 201
 
 
-# ============================================================
-# API 1 - JWT LOGIN
-# ============================================================
+# --------------------------------------------------
+# Login API
+# --------------------------------------------------
 
 @app.route("/api/login", methods=["POST"])
 def api_login():
 
-    data = request.get_json()
-
-    if not data:
-        return jsonify({
-            "error": "JSON body required"
-        }), 400
+    data = request.get_json() or {}
 
     email = data.get("email")
     password = data.get("password")
@@ -218,205 +199,165 @@ def api_login():
     return jsonify({
         "message": "Login successful",
         "token": token,
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "role": user.role
-        }
-    }), 200
+        "user": user.to_dict()
+    })
 
 
-# ============================================================
-# API 2 - USER PROFILE
-# ============================================================
+# --------------------------------------------------
+# Profile
+# --------------------------------------------------
 
 @app.route("/api/profile", methods=["GET"])
 @jwt_required
-def api_profile():
+def profile():
 
     user = request.current_user
 
     return jsonify({
-        "message": "Access granted",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "role": user.role
-        }
-    }), 200
+        "id": user.id,
+        "email": user.email,
+        "role": user.role
+    })
 
 
-# ============================================================
-# API 3 - GET ALL USERS
-# ADMIN ONLY
-# ============================================================
+# --------------------------------------------------
+# Get All Users - ADMIN ONLY
+# --------------------------------------------------
 
 @app.route("/api/users", methods=["GET"])
 @jwt_required
 def get_users():
 
-    user = request.current_user
+    current_user = request.current_user
 
-    if user.role != "admin":
+    if current_user.role != "admin":
         return jsonify({
             "error": "Admin access required"
         }), 403
 
     users = User.query.all()
 
-    return jsonify({
-        "users": [
-            {
-                "id": u.id,
-                "email": u.email,
-                "role": u.role
-            }
-            for u in users
-        ]
-    }), 200
+    return jsonify([
+        user.to_dict()
+        for user in users
+    ])
 
 
-# ============================================================
-# API 4 - GET USER BY ID
-# ============================================================
+# --------------------------------------------------
+# Get User By ID
+# SECURE AGAINST HORIZONTAL IDOR
+# --------------------------------------------------
 
 @app.route("/api/users/<int:user_id>", methods=["GET"])
 @jwt_required
 def get_user(user_id):
 
-    user = request.current_user
+    current_user = request.current_user
 
-    # User can access own profile.
-    # Admin can access any profile.
-    if user.role != "admin" and user.id != user_id:
+    # SECURITY FIX:
+    # Admin can access any user.
+    # Normal user can access only their own profile.
 
+    if current_user.role != "admin" and current_user.id != user_id:
         return jsonify({
             "error": "Access denied"
         }), 403
 
-    target_user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
 
-    if not target_user:
-
+    if not user:
         return jsonify({
             "error": "User not found"
         }), 404
 
-    return jsonify({
-        "id": target_user.id,
-        "email": target_user.email,
-        "role": target_user.role
-    }), 200
+    return jsonify(user.to_dict())
 
 
-# ============================================================
-# API 5 - CREATE USER
-# ADMIN ONLY
-# ============================================================
+# --------------------------------------------------
+# Create User - ADMIN ONLY
+# --------------------------------------------------
 
 @app.route("/api/users", methods=["POST"])
 @jwt_required
 def create_user():
 
-    user = request.current_user
+    current_user = request.current_user
 
-    if user.role != "admin":
-
+    if current_user.role != "admin":
         return jsonify({
             "error": "Admin access required"
         }), 403
 
-    data = request.get_json()
-
-    if not data:
-
-        return jsonify({
-            "error": "JSON body required"
-        }), 400
+    data = request.get_json() or {}
 
     email = data.get("email")
     password = data.get("password")
     role = data.get("role", "user")
 
     if not email or not password:
-
         return jsonify({
             "error": "Email and password are required"
         }), 400
 
     if role not in ["user", "admin"]:
-
         return jsonify({
             "error": "Invalid role"
         }), 400
 
-    existing_user = User.query.filter_by(
-        email=email
-    ).first()
+    existing_user = User.query.filter_by(email=email).first()
 
     if existing_user:
-
         return jsonify({
-            "error": "Email already exists"
+            "error": "User already exists"
         }), 409
 
-    new_user = User(
+    user = User(
         email=email,
         password_hash=generate_password_hash(password),
         role=role
     )
 
-    db.session.add(new_user)
+    db.session.add(user)
     db.session.commit()
 
     return jsonify({
         "message": "User created successfully",
-        "user": {
-            "id": new_user.id,
-            "email": new_user.email,
-            "role": new_user.role
-        }
+        "user": user.to_dict()
     }), 201
 
 
-# ============================================================
-# API 6 - UPDATE USER
-# ============================================================
+# --------------------------------------------------
+# Update User
+# --------------------------------------------------
 
 @app.route("/api/users/<int:user_id>", methods=["PUT"])
 @jwt_required
 def update_user(user_id):
 
-    user = request.current_user
+    current_user = request.current_user
 
-    if user.role != "admin" and user.id != user_id:
+    # User can update themselves.
+    # Admin can update anyone.
 
+    if current_user.role != "admin" and current_user.id != user_id:
         return jsonify({
             "error": "Access denied"
         }), 403
 
-    target_user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
 
-    if not target_user:
-
+    if not user:
         return jsonify({
             "error": "User not found"
         }), 404
 
-    data = request.get_json()
-
-    if not data:
-
-        return jsonify({
-            "error": "JSON body required"
-        }), 400
+    data = request.get_json() or {}
 
     if "email" in data:
-        target_user.email = data["email"]
+        user.email = data["email"]
 
     if "password" in data:
-
-        target_user.password_hash = generate_password_hash(
+        user.password_hash = generate_password_hash(
             data["password"]
         )
 
@@ -424,176 +365,147 @@ def update_user(user_id):
 
     return jsonify({
         "message": "User updated successfully",
-        "user": {
-            "id": target_user.id,
-            "email": target_user.email,
-            "role": target_user.role
-        }
-    }), 200
+        "user": user.to_dict()
+    })
 
 
-# ============================================================
-# API 7 - DELETE USER
-# ADMIN ONLY
-# ============================================================
+# --------------------------------------------------
+# Delete User - ADMIN ONLY
+# --------------------------------------------------
 
 @app.route("/api/users/<int:user_id>", methods=["DELETE"])
 @jwt_required
 def delete_user(user_id):
 
-    user = request.current_user
+    current_user = request.current_user
 
-    if user.role != "admin":
-
+    if current_user.role != "admin":
         return jsonify({
             "error": "Admin access required"
         }), 403
 
-    target_user = User.query.get(user_id)
+    if current_user.id == user_id:
+        return jsonify({
+            "error": "Admin cannot delete themselves"
+        }), 400
 
-    if not target_user:
+    user = db.session.get(User, user_id)
 
+    if not user:
         return jsonify({
             "error": "User not found"
         }), 404
 
-    if target_user.id == user.id:
-
-        return jsonify({
-            "error": "Admin cannot delete itself"
-        }), 403
-
-    db.session.delete(target_user)
+    db.session.delete(user)
     db.session.commit()
 
     return jsonify({
         "message": "User deleted successfully"
-    }), 200
+    })
 
 
-# ============================================================
-# API 8 - CHANGE USER ROLE
-# ADMIN ONLY
-# ============================================================
+# --------------------------------------------------
+# Change User Role
+# SECURE AGAINST VERTICAL PRIVILEGE ESCALATION
+# --------------------------------------------------
 
 @app.route("/api/users/<int:user_id>/role", methods=["PUT"])
 @jwt_required
-def change_user_role(user_id):
+def change_role(user_id):
 
-    user = request.current_user
+    current_user = request.current_user
 
-    if user.role != "admin":
+    # SECURITY FIX:
+    # Only administrators can change roles.
 
+    if current_user.role != "admin":
         return jsonify({
             "error": "Admin access required"
         }), 403
 
-    target_user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
 
-    if not target_user:
-
+    if not user:
         return jsonify({
             "error": "User not found"
         }), 404
 
-    data = request.get_json()
+    data = request.get_json() or {}
 
-    if not data or "role" not in data:
+    new_role = data.get("role")
 
-        return jsonify({
-            "error": "Role is required"
-        }), 400
-
-    if data["role"] not in ["user", "admin"]:
-
+    if new_role not in ["user", "admin"]:
         return jsonify({
             "error": "Invalid role"
         }), 400
 
-    target_user.role = data["role"]
-
+    user.role = new_role
     db.session.commit()
 
     return jsonify({
-        "message": "Role updated successfully",
-        "user": {
-            "id": target_user.id,
-            "email": target_user.email,
-            "role": target_user.role
-        }
-    }), 200
+        "message": "Role updated",
+        "user": user.to_dict()
+    })
 
 
-# ============================================================
-# API 9 - RESOURCES
-# ============================================================
+# --------------------------------------------------
+# Resources
+# --------------------------------------------------
 
 @app.route("/api/resources", methods=["GET"])
 @jwt_required
-def get_resources():
+def resources():
 
-    user = request.current_user
+    current_user = request.current_user
 
     resources = [
         {
-            "id": 1,
             "name": "User Profile",
             "access": "user"
-        },
-        {
-            "id": 2,
-            "name": "User Management",
-            "access": "admin"
-        },
-        {
-            "id": 3,
-            "name": "Admin Dashboard",
-            "access": "admin"
         }
     ]
 
-    accessible_resources = []
+    if current_user.role == "admin":
 
-    for resource in resources:
-
-        if resource["access"] == "user":
-
-            accessible_resources.append(resource)
-
-        elif (
-            resource["access"] == "admin"
-            and user.role == "admin"
-        ):
-
-            accessible_resources.append(resource)
+        resources.extend([
+            {
+                "name": "User Management",
+                "access": "admin"
+            },
+            {
+                "name": "Admin Dashboard",
+                "access": "admin"
+            }
+        ])
 
     return jsonify({
-        "user_role": user.role,
-        "resources": accessible_resources
-    }), 200
+        "user": current_user.email,
+        "role": current_user.role,
+        "resources": resources
+    })
 
 
-# ============================================================
-# API 10 - ADMIN DASHBOARD
-# ============================================================
+# --------------------------------------------------
+# Admin Dashboard
+# SECURE AGAINST VERTICAL PRIVILEGE ESCALATION
+# --------------------------------------------------
 
 @app.route("/api/admin/dashboard", methods=["GET"])
 @jwt_required
 def admin_dashboard():
 
-    user = request.current_user
+    current_user = request.current_user
 
-    if user.role != "admin":
+    # SECURITY FIX:
+    # Only administrators can access this endpoint.
 
+    if current_user.role != "admin":
         return jsonify({
             "error": "Admin access required"
         }), 403
 
     total_users = User.query.count()
-
-    total_admins = User.query.filter_by(
-        role="admin"
-    ).count()
+    total_admins = User.query.filter_by(role="admin").count()
 
     return jsonify({
         "message": "Admin dashboard access granted",
@@ -601,73 +513,77 @@ def admin_dashboard():
             "total_users": total_users,
             "total_admins": total_admins
         }
-    }), 200
+    })
 
 
-# ============================================================
-# WEB LOGIN
-# ============================================================
+# --------------------------------------------------
+# Web Login
+# --------------------------------------------------
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
 
-    if request.method == "POST":
+    if request.method == "GET":
+        return """
+        <h2>Login</h2>
+        <form method="POST">
+            <input name="email" type="email" placeholder="Email" required>
+            <input name="password" type="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+        </form>
+        """
 
-        email = request.form["email"]
-        password = request.form["password"]
+    email = request.form.get("email")
+    password = request.form.get("password")
 
-        user = User.query.filter_by(
-            email=email
-        ).first()
+    user = User.query.filter_by(email=email).first()
 
-        if user and check_password_hash(
-            user.password_hash,
-            password
-        ):
+    if not user or not check_password_hash(
+        user.password_hash,
+        password
+    ):
+        return "Invalid email or password", 401
 
-            session["user_id"] = user.id
+    session["user_id"] = user.id
+    session["email"] = user.email
+    session["role"] = user.role
 
-            return redirect(url_for("dashboard"))
-
-        flash("Invalid email or password")
-
-    return render_template("login.html")
+    return redirect(url_for("dashboard"))
 
 
-# ============================================================
-# DASHBOARD
-# ============================================================
+# --------------------------------------------------
+# Dashboard
+# --------------------------------------------------
 
 @app.route("/dashboard")
 def dashboard():
 
     if "user_id" not in session:
-
         return redirect(url_for("login"))
 
-    user = User.query.get(session["user_id"])
+    return f"""
+    <h2>Dashboard</h2>
+    <p>Welcome, {session["email"]}</p>
+    <p>Role: {session["role"]}</p>
+    <a href="/logout">Logout</a>
+    """
 
-    return render_template(
-        "dashboard.html",
-        user=user
-    )
 
-
-# ============================================================
-# LOGOUT
-# ============================================================
+# --------------------------------------------------
+# Logout
+# --------------------------------------------------
 
 @app.route("/logout")
 def logout():
 
-    session.pop("user_id", None)
+    session.clear()
 
     return redirect(url_for("login"))
 
 
-# ============================================================
-# RUN APPLICATION
-# ============================================================
+# --------------------------------------------------
+# Run Application
+# --------------------------------------------------
 
 if __name__ == "__main__":
     app.run(
