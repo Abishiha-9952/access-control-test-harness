@@ -717,34 +717,21 @@ User B's profile unchanged
 
 ---
 
-# 22. Reports
+# 22. Security Testing Reports
 
-Generated security reports are stored in:
+Generated security-testing reports are included in the `reports/` directory.
 
-```text
-reports/
-```
+The reports provide evidence of the authorization tests performed by the harness, including tested endpoints, user roles, expected behavior, actual behavior, and test results.
 
-The repository contains reports such as:
+Available reports include:
 
-```text
-live-website_access_control_report.pdf
-website-target-1_access_control_report.pdf
-website-target-2_access_control_report.pdf
-```
+- `live-website_access_control_report.pdf` — Access-control testing report for the live test target.
+- `website-target-1_access_control_report.pdf` — Access-control testing report for Target 1.
+- `website-target-2_access_control_report.pdf` — Access-control testing report for Target 2.
 
-Reports can provide evidence including:
+HTML versions of the reports are also provided where available.
 
-- Tested endpoints
-- User/role used
-- Expected authorization behavior
-- Actual behavior
-- Test results
-- Detected authorization issues
-- Response validation
-- State validation
-
----
+These reports are included as project evidence and are intended to support reproducibility and mentor/project review.
 
 # 23. Recommended Testing Evidence
 
