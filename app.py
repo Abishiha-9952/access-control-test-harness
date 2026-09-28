@@ -352,6 +352,10 @@ def update_user(user_id):
         }), 404
 
     data = request.get_json() or {}
+    if not data:
+        return jsonify({
+            "error": "At least one field is required"
+        }), 400
 
     if "email" in data:
         user.email = data["email"]
