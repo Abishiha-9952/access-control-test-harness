@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Users | SecureAccess</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+
+<body>
+    <nav class="topbar">
+
+        <div class="logo">
+            <span class="logo-icon">◆</span>
+            SecureAccess
+        </div>
+    
+        <div class="nav-links">
+    
+            <a href="/dashboard">Dashboard</a>
+    
+            <a href="/profile">Profile</a>
+    
+            <a href="/orders">Orders</a>
+    
+            {% if session.get("role")|lower == "admin" %}
+                <a href="/admin/users">Users</a>
+                <a href="/admin/stats">Statistics</a>
+            {% endif %}
+    
+            <a href="/logout" class="logout">Logout</a>
+    
+        </div>
+    
+    </nav>
+
+
+<main class="dashboard-page">
+
+    <div class="dashboard-label">
+        ADMINISTRATION
+    </div>
+
+
+    <section class="welcome-section">
+
+        <div>
+
+            <h1>
+                User <span>Management</span>
+            </h1>
+
+            <p>
+                View and manage registered application users.
+            </p>
+
+        </div>
+
+
+        <div class="role-badge">
+
+            <div class="role-dot"></div>
+
+            <div>
+                <small>ACCESS LEVEL</small>
+                <strong>{{ role|upper }}</strong>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section class="resource-grid">
+
+        {% if users %}
+
+            {% for user in users %}
+
+            <div class="resource-card admin-resource">
+
+                <div class="resource-icon purple-bg">
+                    👤
+                </div>
+
+                <div class="resource-content">
+
+                    <div class="admin-label">
+                        USER ACCOUNT
+                    </div>
+
+                    <h3>
+                        {{ user.username }}
+                    </h3>
+
+                    <p>
+                        User ID: {{ user.id }}
+                    </p>
+
+                    <p>
+                        Email: {{ user.email }}
+                    </p>
+
+                    <span>
+                        Account Active
+                    </span>
+
+                </div>
+
+            </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <div class="resource-card">
+
+                <div class="resource-icon blue-bg">
+                    👥
+                </div>
+
+                <div class="resource-content">
+
+                    <h3>No Users Found</h3>
+
+                    <p>
+                        No user records are currently available.
+                    </p>
+
+                </div>
+
+            </div>
+
+        {% endif %}
+
+    </section>
+
+
+    <section class="security-panel">
+
+        <div class="security-icon">✓</div>
+
+        <div>
+
+            <h2>Administrative Resource</h2>
+
+            <p>
+                User management is restricted to
+                administrators.
+            </p>
+
+        </div>
+
+        <div class="security-status">
+            ADMIN ONLY
+        </div>
+
+    </section>
+
+</main>
+
+
+<footer>
+    <span>SecureAccess</span>
+    <span>Access Control Test Application</span>
+</footer>
+
+</body>
+</html>

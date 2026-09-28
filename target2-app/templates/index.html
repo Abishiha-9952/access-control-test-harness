@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SecureAccess</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<nav>
+    <div class="logo">SecureAccess</div>
+
+    <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/login">Login</a>
+    </div>
+</nav>
+
+<section class="hero">
+
+    <div class="hero-content">
+
+        <div class="badge">
+            ACCESS CONTROL TEST APPLICATION
+        </div>
+
+        <h1>
+            Secure access.<br>
+            <span>Built for every role.</span>
+        </h1>
+
+        <p>
+            A demonstration web application designed to test
+            authentication, authorization, role-based access control,
+            and resource ownership.
+        </p>
+
+        <div class="buttons">
+
+            <a href="/login" class="primary-btn">
+                Login to Dashboard
+            </a>
+
+            <a href="/api/products" class="secondary-btn">
+                View API
+            </a>
+
+        </div>
+
+    </div>
+
+</section>
+
+<section class="features">
+
+    <div class="feature-card">
+
+        <h3>Role Based Access</h3>
+
+        <p>
+            Different permissions are applied to administrators
+            and normal users.
+        </p>
+
+    </div>
+
+    <div class="feature-card">
+
+        <h3>Protected Resources</h3>
+
+        <p>
+            User profiles and orders are protected according
+            to resource ownership.
+        </p>
+
+    </div>
+
+    <div class="feature-card">
+
+        <h3>API Security</h3>
+
+        <p>
+            Protected API endpoints use JWT authentication
+            and authorization checks.
+        </p>
+
+    </div>
+
+</section>
+
+<footer>
+
+    <p>
+        SecureAccess — Access Control Test Application
+    </p>
+
+</footer>
+
+</body>
+</html>

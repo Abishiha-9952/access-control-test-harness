@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Profile | SecureAccess</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+
+<body>
+    <nav class="topbar">
+
+        <div class="logo">
+            <span class="logo-icon">◆</span>
+            SecureAccess
+        </div>
+    
+        <div class="nav-links">
+    
+            <a href="/dashboard">Dashboard</a>
+    
+            <a href="/profile">Profile</a>
+    
+            <a href="/orders">Orders</a>
+    
+            {% if session.get("role")|lower == "admin" %}
+                <a href="/admin/users">Users</a>
+                <a href="/admin/stats">Statistics</a>
+            {% endif %}
+    
+            <a href="/logout" class="logout">Logout</a>
+    
+        </div>
+    
+    </nav>
+
+
+<main class="dashboard-page">
+
+    <div class="dashboard-label">
+        USER PROFILE
+    </div>
+
+    <section class="welcome-section">
+
+        <div>
+            <h1>
+                My <span>Profile</span>
+            </h1>
+
+            <p>
+                View your personal account information.
+            </p>
+        </div>
+
+        <div class="role-badge">
+
+            <div class="role-dot"></div>
+
+            <div>
+                <small>CURRENT ROLE</small>
+                <strong>{{ role|upper }}</strong>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section class="resource-grid">
+
+        <div class="resource-card">
+
+            <div class="resource-icon blue-bg">
+                👤
+            </div>
+
+            <div class="resource-content">
+
+                <h3>Account Information</h3>
+
+                <p>
+                    Username:
+                    <strong>{{ username }}</strong>
+                </p>
+
+                <p>
+                    Role:
+                    <strong>{{ role|capitalize }}</strong>
+                </p>
+
+                <span>
+                    Account Verified
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="resource-card">
+
+            <div class="resource-icon green-bg">
+                ✓
+            </div>
+
+            <div class="resource-content">
+
+                <h3>Account Status</h3>
+
+                <p>
+                    Your account is authenticated and
+                    access-control policies are active.
+                </p>
+
+                <span>
+                    Active
+                </span>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section class="security-panel">
+
+        <div class="security-icon">✓</div>
+
+        <div>
+            <h2>Profile Access Protected</h2>
+
+            <p>
+                Users can access their own profile.
+                Administrative access is controlled by role.
+            </p>
+        </div>
+
+        <div class="security-status">
+            SECURE
+        </div>
+
+    </section>
+
+</main>
+
+
+<footer>
+    <span>SecureAccess</span>
+    <span>Access Control Test Application</span>
+</footer>
+
+</body>
+</html>

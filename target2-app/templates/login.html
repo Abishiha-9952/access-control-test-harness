@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Login | SecureAccess</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<nav>
+
+    <div class="logo">
+        SecureAccess
+    </div>
+
+    <div class="nav-links">
+        <a href="/">Home</a>
+    </div>
+
+</nav>
+
+
+<section class="login-section">
+
+    <div class="login-card">
+
+        <div class="badge">
+            SECURE LOGIN
+        </div>
+
+        <h1>Welcome back</h1>
+
+        <p class="login-description">
+            Sign in to access your SecureAccess dashboard.
+        </p>
+
+
+        {% if error %}
+
+        <div class="error-message">
+            {{ error }}
+        </div>
+
+        {% endif %}
+
+
+        <form method="POST" action="/login">
+
+            <label for="username">
+                Username
+            </label>
+
+            <input
+                type="text"
+                id="username"
+                name="username"
+                placeholder="Enter username"
+                required
+            >
+
+
+            <label for="password">
+                Password
+            </label>
+
+            <input
+                type="password"
+                id="password"
+                name="password"
+                placeholder="Enter password"
+                required
+            >
+
+
+            <button type="submit" class="login-btn">
+                Sign In
+            </button>
+
+        </form>
+
+
+        <div class="demo-info">
+
+            <strong>Demo Accounts</strong>
+
+            <p>
+                Admin: <b>admin</b> / <b>admin123</b>
+            </p>
+
+            <p>
+                User: <b>user1</b> / <b>user123</b>
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<footer>
+
+    <p>
+        SecureAccess — Access Control Test Application
+    </p>
+
+</footer>
+
+</body>
+
+</html>

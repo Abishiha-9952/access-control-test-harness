@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Orders | SecureAccess</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+
+<body>
+
+    <nav class="topbar">
+
+        <div class="logo">
+            <span class="logo-icon">◆</span>
+            SecureAccess
+        </div>
+    
+        <div class="nav-links">
+    
+            <a href="/dashboard">Dashboard</a>
+    
+            <a href="/profile">Profile</a>
+    
+            <a href="/orders">Orders</a>
+    
+            {% if session.get("role")|lower == "admin" %}
+                <a href="/admin/users">Users</a>
+                <a href="/admin/stats">Statistics</a>
+            {% endif %}
+    
+            <a href="/logout" class="logout">Logout</a>
+    
+        </div>
+    
+    </nav>
+
+
+<main class="dashboard-page">
+
+    <div class="dashboard-label">
+        ORDER MANAGEMENT
+    </div>
+
+
+    <section class="welcome-section">
+
+        <div>
+
+            <h1>
+                My <span>Orders</span>
+            </h1>
+
+            <p>
+                View orders associated with your account.
+            </p>
+
+        </div>
+
+
+        <div class="role-badge">
+
+            <div class="role-dot"></div>
+
+            <div>
+                <small>CURRENT ROLE</small>
+                <strong>{{ role|upper }}</strong>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section class="resource-grid">
+
+        {% if orders %}
+
+            {% for order in orders %}
+
+            <div class="resource-card">
+
+                <div class="resource-icon green-bg">
+                    ◫
+                </div>
+
+                <div class="resource-content">
+
+                    <h3>
+                        Order #{{ order.id }}
+                    </h3>
+
+                    <p>
+                        Item:
+                        <strong>{{ order.item }}</strong>
+                    </p>
+
+                    <p>
+                        Customer ID:
+                        {{ order.user_id }}
+                    </p>
+
+                    <span>
+                        Order Available
+                    </span>
+
+                </div>
+
+            </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <div class="resource-card">
+
+                <div class="resource-icon blue-bg">
+                    ◫
+                </div>
+
+                <div class="resource-content">
+
+                    <h3>No Orders</h3>
+
+                    <p>
+                        There are no orders available
+                        for your account.
+                    </p>
+
+                </div>
+
+            </div>
+
+        {% endif %}
+
+    </section>
+
+
+    <section class="security-panel">
+
+        <div class="security-icon">✓</div>
+
+        <div>
+
+            <h2>Resource Ownership Protected</h2>
+
+            <p>
+                Users can access their own orders.
+                Access to another user's order should
+                be denied.
+            </p>
+
+        </div>
+
+        <div class="security-status">
+            PROTECTED
+        </div>
+
+    </section>
+
+</main>
+
+
+<footer>
+    <span>SecureAccess</span>
+    <span>Access Control Test Application</span>
+</footer>
+
+</body>
+</html>

@@ -1,16 +1,25 @@
+# Python virtual environment
 venv/
+.venv/
+
+# Python cache
 __pycache__/
 *.pyc
 
-harness/reports/
-*.pdf
-*.html
-
+# Environment / secrets
 .env
 
+# Logs
+*.log
+
+# Temporary backup files
+*.bak
+*.bak.*
+
+# Local databases
 target3-app/instance/*.db
-
-__pycache__/
-*.pyc
-
 lab/target3-vulnerable/instance/*.db
+
+# Local/generated reports
+# Keep reports that are intentionally committed for review
+harness/reports/*.html

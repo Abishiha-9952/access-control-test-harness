@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Dashboard | SecureAccess</title>
+
+    <!-- Main website CSS -->
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <!-- Dashboard-specific CSS -->
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+
+
+<body>
+
+    <!-- ================= NAVIGATION ================= -->
+
+    <nav class="topbar">
+
+        <div class="logo">
+            <span class="logo-icon">◆</span>
+            SecureAccess
+        </div>
+    
+        <div class="nav-links">
+    
+            <a href="/dashboard">Dashboard</a>
+    
+            <a href="/profile">Profile</a>
+    
+            <a href="/orders">Orders</a>
+    
+            {% if session.get("role")|lower == "admin" %}
+                <a href="/admin/users">Users</a>
+                <a href="/admin/stats">Statistics</a>
+            {% endif %}
+    
+            <a href="/logout" class="logout">Logout</a>
+    
+        </div>
+    
+    </nav>
+
+
+    <!-- ================= MAIN DASHBOARD ================= -->
+
+    <main class="dashboard-page">
+
+
+        <!-- WELCOME SECTION -->
+
+        <section class="welcome-section">
+
+            <div>
+
+                <div class="dashboard-label">
+                    ACCESS CONTROL DASHBOARD
+                </div>
+
+
+                <h1>
+                    Welcome back,
+                    <span>{{ username }}</span>
+                </h1>
+
+
+                <p>
+                    Monitor your account and access the
+                    resources available to your role.
+                </p>
+
+            </div>
+
+
+            <!-- CURRENT ROLE -->
+
+            <div class="role-badge">
+
+                <div class="role-dot"></div>
+
+                <div>
+
+                    <small>
+                        CURRENT ROLE
+                    </small>
+
+                    <strong>
+                        {{ role|upper }}
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================= STATUS CARDS ================= -->
+
+        <section class="stats-row">
+
+
+            <!-- AUTHENTICATION -->
+
+            <div class="stat-card">
+
+                <div class="stat-icon blue">
+                    ✓
+                </div>
+
+                <div>
+
+                    <small>
+                        Authentication
+                    </small>
+
+                    <h3>
+                        Verified
+                    </h3>
+
+                </div>
+
+            </div>
+
+
+            <!-- ACCESS -->
+
+            <div class="stat-card">
+
+                <div class="stat-icon green">
+                    ✓
+                </div>
+
+                <div>
+
+                    <small>
+                        Access Status
+                    </small>
+
+                    <h3>
+                        Authorized
+                    </h3>
+
+                </div>
+
+            </div>
+
+
+            <!-- ROLE -->
+
+            <div class="stat-card">
+
+                <div class="stat-icon purple">
+                    ◆
+                </div>
+
+                <div>
+
+                    <small>
+                        Account Role
+                    </small>
+
+                    <h3>
+                        {{ role|capitalize }}
+                    </h3>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ================= RESOURCES ================= -->
+
+        <section class="section-title">
+
+            <h2>
+                Available Resources
+            </h2>
+
+            <p>
+                Resources available according to your permissions.
+            </p>
+
+        </section>
+
+
+
+        <section class="resource-grid">
+
+
+            <!-- PROFILE -->
+
+            <a href="/profile"
+               class="resource-card">
+
+                <div class="resource-icon blue-bg">
+                    👤
+                </div>
+
+
+                <div class="resource-content">
+
+                    <h3>
+                        My Profile
+                    </h3>
+
+                    <p>
+                        View your personal account information
+                        and profile details.
+                    </p>
+
+                    <span>
+                        View Profile →
+                    </span>
+
+                </div>
+
+            </a>
+
+
+
+            <!-- ORDERS -->
+
+            <a href="/orders"
+               class="resource-card">
+
+                <div class="resource-icon green-bg">
+                    ◫
+                </div>
+
+
+                <div class="resource-content">
+
+                    <h3>
+                        My Orders
+                    </h3>
+
+                    <p>
+                        View orders associated with your account
+                        and their current status.
+                    </p>
+
+                    <span>
+                        View Orders →
+                    </span>
+
+                </div>
+
+            </a>
+
+
+
+            <!-- ADMIN USER MANAGEMENT -->
+
+            {% if role == "admin" %}
+
+            <a href="/admin/users"
+               class="resource-card admin-resource">
+
+                <div class="resource-icon purple-bg">
+                    👥
+                </div>
+
+
+                <div class="resource-content">
+
+                    <div class="admin-label">
+                        ADMIN ONLY
+                    </div>
+
+                    <h3>
+                        User Management
+                    </h3>
+
+                    <p>
+                        View and manage registered application
+                        users.
+                    </p>
+
+                    <span>
+                        Manage Users →
+                    </span>
+
+                </div>
+
+            </a>
+
+
+
+            <!-- ADMIN STATISTICS -->
+
+            <a href="/admin/stats"
+               class="resource-card admin-resource">
+
+                <div class="resource-icon orange-bg">
+                    ▥
+                </div>
+
+
+                <div class="resource-content">
+
+                    <div class="admin-label">
+                        ADMIN ONLY
+                    </div>
+
+                    <h3>
+                        System Statistics
+                    </h3>
+
+                    <p>
+                        View application users, orders and
+                        product statistics.
+                    </p>
+
+                    <span>
+                        View Statistics →
+                    </span>
+
+                </div>
+
+            </a>
+
+            {% endif %}
+
+        </section>
+
+
+
+        <!-- ================= SECURITY STATUS ================= -->
+
+        <section class="security-panel">
+
+            <div class="security-icon">
+                ✓
+            </div>
+
+
+            <div>
+
+                <h2>
+                    Access Control Active
+                </h2>
+
+                <p>
+                    Your access to protected resources is
+                    controlled by your assigned role and
+                    resource ownership.
+                </p>
+
+            </div>
+
+
+            <div class="security-status">
+                SECURE
+            </div>
+
+        </section>
+
+
+    </main>
+
+
+
+    <!-- ================= FOOTER ================= -->
+
+    <footer>
+
+        <span>
+            SecureAccess
+        </span>
+
+        <span>
+            Access Control Test Application
+        </span>
+
+    </footer>
+
+
+</body>
+
+</html>

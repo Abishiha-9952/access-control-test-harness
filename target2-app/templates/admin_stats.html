@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Statistics | SecureAccess</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+
+<body>
+
+<nav class="topbar">
+
+    <div class="logo">
+        <span class="logo-icon">◆</span>
+        SecureAccess
+    </div>
+
+    <div class="nav-links">
+
+        <a href="/dashboard">Dashboard</a>
+
+        <a href="/profile">Profile</a>
+
+        <a href="/orders">Orders</a>
+
+        {% if session.get("role", "")|lower == "admin" %}
+
+            <a href="/admin/users">Users</a>
+
+            <a class="active" href="/admin/stats">
+                Statistics
+            </a>
+
+        {% endif %}
+
+        <a href="/logout" class="logout">
+            Logout
+        </a>
+
+    </div>
+
+</nav>
+
+
+<main class="dashboard-page">
+
+    <div class="dashboard-label">
+        ADMINISTRATION
+    </div>
+
+
+    <section class="welcome-section">
+
+        <div>
+
+            <h1>
+                System <span>Statistics</span>
+            </h1>
+
+            <p>
+                Administrative overview of the application.
+            </p>
+
+        </div>
+
+
+        <div class="role-badge">
+
+            <div class="role-dot"></div>
+
+            <div>
+                <small>ACCESS LEVEL</small>
+
+                <strong>
+                    {{ session.get("role", "USER")|upper }}
+                </strong>
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- STATISTICS -->
+
+    <section class="stats-row">
+
+
+        <!-- USERS -->
+
+        <div class="stat-card">
+
+            <div class="stat-icon blue">
+                👥
+            </div>
+
+            <div>
+
+                <small>Total Users</small>
+
+                <h3>
+                    {{ total_users }}
+                </h3>
+
+            </div>
+
+        </div>
+
+
+        <!-- ORDERS -->
+
+        <div class="stat-card">
+
+            <div class="stat-icon green">
+                ◫
+            </div>
+
+            <div>
+
+                <small>Total Orders</small>
+
+                <h3>
+                    {{ total_orders }}
+                </h3>
+
+            </div>
+
+        </div>
+
+
+        <!-- PRODUCTS -->
+
+        <div class="stat-card">
+
+            <div class="stat-icon purple">
+                ◆
+            </div>
+
+            <div>
+
+                <small>Total Products</small>
+
+                <h3>
+                    {{ total_products }}
+                </h3>
+
+            </div>
+
+        </div>
+
+
+    </section>
+
+
+    <!-- SECURITY -->
+
+    <section class="security-panel">
+
+        <div class="security-icon">
+            ✓
+        </div>
+
+        <div>
+
+            <h2>
+                Administrator Access
+            </h2>
+
+            <p>
+                This page contains administrative information
+                and is restricted to authorized administrators.
+            </p>
+
+        </div>
+
+        <div class="security-status">
+            ADMIN ONLY
+        </div>
+
+    </section>
+
+</main>
+
+
+<footer>
+
+    <span>
+        SecureAccess
+    </span>
+
+    <span>
+        Access Control Test Application
+    </span>
+
+</footer>
+
+</body>
+</html>
