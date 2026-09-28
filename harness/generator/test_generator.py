@@ -1,4 +1,4 @@
-def generate_tests(policy):
+def generate_tests(endpoints, policy):
     """
     Generate access-control test cases
     from an inferred authorization policy.
