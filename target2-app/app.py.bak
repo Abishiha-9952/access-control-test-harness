@@ -332,9 +332,8 @@ def admin_stats():
     if "username" not in session:
         return redirect("/login")
 
-    # INTENTIONALLY VULNERABLE:
-    # Missing role/privilege check allows ordinary authenticated
-    # users to access the admin statistics page.
+    if session.get("role", "").lower() != "admin":
+        return "Forbidden", 403
 
     total_users = len(users)
     total_orders = len(orders)
@@ -561,16 +560,23 @@ def api_delete_user(user_id):
 @app.route("/api/admin/stats", methods=["GET"])
 @token_required
 def api_admin_stats():
-    # INTENTIONALLY VULNERABLE TARGET:
-    # Authentication is checked, but the user's role is NOT checked.
-    # Therefore a normal authenticated USER can access admin statistics.
+
+    if request.user["role"] != "admin":
+
+        return jsonify({
+            "error": "Admin access required"
+        }), 403
 
     return jsonify({
-        "total_users": 2,
-        "total_orders": 2,
-        "total_products": 3,
-        "message": "Administrator statistics"
+        "total_users": len(profiles),
+        "total_orders": len(orders),
+        "total_products": len(products)
     }), 200
+
+
+# ============================================================
+# START SERVER
+# ============================================================
 
 if __name__ == "__main__":
 

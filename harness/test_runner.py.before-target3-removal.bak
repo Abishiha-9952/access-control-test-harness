@@ -108,17 +108,6 @@ BASE_DIR = os.path.dirname(
     )
 )
 
-ROLE_MATRICES = {
-    "Website Target 1": os.path.join(
-        BASE_DIR,
-        "role_matrix_target1.yaml"
-    ),
-    "Website Target 2": os.path.join(
-        BASE_DIR,
-        "role_matrix_target2.yaml"
-    ),
-}
-
 ROLE_MATRIX = os.path.join(
     BASE_DIR,
     "role_matrix.yaml"
@@ -163,16 +152,44 @@ USERS = {
         ),
         "password": os.getenv(
             "USER_PASSWORD",
-            "user123"
+            "password123"
         ),
     },
 }
+
+TARGET3_USERS = {
+    "admin": {
+        "email": os.getenv(
+            "TARGET3_ADMIN_EMAIL",
+            "admin@example.com"
+        ),
+        "password": os.getenv(
+            "TARGET3_ADMIN_PASSWORD",
+            "admin123"
+        ),
+    },
+
+    "user": {
+        "email": os.getenv(
+            "TARGET3_USER_EMAIL",
+            "usera@example.com"
+        ),
+        "password": os.getenv(
+            "TARGET3_USER_PASSWORD",
+            "password123"
+        ),
+    },
+}
+
 
 # ============================================================
 # ACTIVE TEST USERS
 # ============================================================
 
-ACTIVE_USERS = USERS
+if TARGET_NAME == "Website Target 3":
+    ACTIVE_USERS = TARGET3_USERS
+else:
+    ACTIVE_USERS = USERS
 
 # ============================================================
 # TEST RESOURCE IDs
@@ -189,6 +206,13 @@ RESOURCE_IDS_BY_TARGET = {
     "Website Target 2": {
         "own_user": "2",
         "other_user": "3",
+        "own_order": "101",
+        "other_order": "102",
+    },
+
+    "Website Target 3": {
+        "own_user": "1",
+        "other_user": "2",
         "own_order": "101",
         "other_order": "102",
     },
@@ -239,7 +263,11 @@ WHITE = "#FFFFFF"
 # LOAD ROLE MATRIX
 def load_role_matrix():
 
-    matrix_file = ROLE_MATRIX
+    matrix_file = (
+        ROLE_MATRIX_TARGET3
+        if TARGET_NAME == "Website Target 3"
+        else ROLE_MATRIX
+    )
 
     try:
 
@@ -361,18 +389,35 @@ def request_data(
 
     if method == "POST" and path == "/api/login":
 
-        users = USERS
+        if TARGET_NAME == "Website Target 3":
 
-        if role in users:
+            users = TARGET3_USERS
+
+            if role in users:
+                return {
+                    "email": users[role]["email"],
+                    "password": users[role]["password"],
+                }
+
             return {
-                "username": users[role]["username"],
-                "password": users[role]["password"],
+                "email": users["user"]["email"],
+                "password": users["user"]["password"],
             }
 
-        return {
-            "username": users["user"]["username"],
-            "password": users["user"]["password"],
-        }
+        else:
+
+            users = USERS
+
+            if role in users:
+                return {
+                    "username": users[role]["username"],
+                    "password": users[role]["password"],
+                }
+
+            return {
+                "username": users["user"]["username"],
+                "password": users["user"]["password"],
+            }
 
     # --------------------------------------------------------
     # PATCH
@@ -614,6 +659,153 @@ def build_tests():
 def build_security_tests():
 
     tests = []
+
+    # ========================================================
+    # TARGET 3
+    # ========================================================
+
+    if TARGET_NAME == "Website Target 3":
+
+        # ----------------------------------------------------
+        # Missing authentication
+        # ----------------------------------------------------
+
+        protected_endpoints = [
+
+            ("GET", "/api/profile", "Authentication"),
+
+            ("GET", "/api/users", "Authentication"),
+
+            (
+                "GET",
+                f"/api/users/{RESOURCE_IDS['other_user']}",
+                "Authentication"
+            ),
+
+            ("POST", "/api/users", "Authentication"),
+
+            (
+                "PUT",
+                f"/api/users/{RESOURCE_IDS['other_user']}",
+                "Authentication"
+            ),
+
+            (
+                "DELETE",
+                f"/api/users/{RESOURCE_IDS['other_user']}",
+                "Authentication"
+            ),
+
+            (
+                "PUT",
+                f"/api/users/{RESOURCE_IDS['other_user']}/role",
+                "Authentication"
+            ),
+
+            ("GET", "/api/resources", "Authentication"),
+
+            ("GET", "/api/admin/dashboard", "Authentication"),
+        ]
+
+        for method, path, category in protected_endpoints:
+
+            tests.append(
+                {
+                    "role": "guest",
+                    "method": method,
+                    "path": path,
+                    "access": "unauthenticated",
+                    "category": category,
+                    "authentication": False,
+                    "invalid_token": False,
+                }
+            )
+
+        # ----------------------------------------------------
+        # Invalid JWT
+        # ----------------------------------------------------
+
+        invalid_token_endpoints = [
+
+            ("GET", "/api/profile"),
+
+            ("GET", "/api/users"),
+
+            ("GET", "/api/resources"),
+
+            ("GET", "/api/admin/dashboard"),
+        ]
+
+        for method, path in invalid_token_endpoints:
+
+            tests.append(
+                {
+                    "role": "user",
+                    "method": method,
+                    "path": path,
+                    "access": "invalid_token",
+                    "category": "JWT Validation",
+                    "authentication": False,
+                    "invalid_token": True,
+                }
+            )
+
+        # ----------------------------------------------------
+        # Horizontal Authorization / IDOR
+        # ----------------------------------------------------
+
+        # User tries to read another user's account.
+        tests.append(
+            {
+                "role": "user",
+                "method": "GET",
+                "path": (
+                    f"/api/users/"
+                    f"{RESOURCE_IDS['other_user']}"
+                ),
+                "access": "deny",
+                "category": "Horizontal Authorization / IDOR",
+                "authentication": True,
+                "invalid_token": False,
+                "idor": True,
+            }
+        )
+
+        # User tries to modify another user's account.
+        tests.append(
+            {
+                "role": "user",
+                "method": "PUT",
+                "path": (
+                    f"/api/users/"
+                    f"{RESOURCE_IDS['other_user']}"
+                ),
+                "access": "deny",
+                "category": "Horizontal Authorization / IDOR",
+                "authentication": True,
+                "invalid_token": False,
+                "idor": True,
+            }
+        )
+
+        # User tries to change another user's role.
+        tests.append(
+            {
+                "role": "user",
+                "method": "PUT",
+                "path": (
+                    f"/api/users/"
+                    f"{RESOURCE_IDS['other_user']}/role"
+                ),
+                "access": "deny",
+                "category": "Horizontal Authorization / IDOR",
+                "authentication": True,
+                "invalid_token": False,
+                "idor": True,
+            }
+        )
+
+        return tests
 
     # ========================================================
     # TARGET 1 / TARGET 2
@@ -2905,10 +3097,19 @@ def login(identifier, password):
 
     try:
 
-        payload = {
-            "username": identifier,
-            "password": password,
-        }
+        if TARGET_NAME == "Website Target 3":
+
+            payload = {
+                "email": identifier,
+                "password": password,
+            }
+
+        else:
+
+            payload = {
+                "username": identifier,
+                "password": password,
+            }
 
         response = requests.post(
             f"{BASE_URL}/api/login",
@@ -2993,6 +3194,7 @@ def run_tests():
     global BASE_URL
     global TARGET_NAME
     global ROLE_MATRIX
+    global ROLE_MATRIX_TARGET3
     global REQUEST_TIMEOUT
     global HTML_REPORT
     global PDF_REPORT
@@ -3038,7 +3240,10 @@ def run_tests():
     # Resolve target-dependent configuration only after the
     # target has been selected. This keeps module imports safe.
 
-    ACTIVE_USERS = USERS
+    if TARGET_NAME == "Website Target 3":
+        ACTIVE_USERS = TARGET3_USERS
+    else:
+        ACTIVE_USERS = USERS
 
     RESOURCE_IDS = RESOURCE_IDS_BY_TARGET.get(TARGET_NAME)
 
@@ -3093,12 +3298,9 @@ def run_tests():
 
         ROLE_MATRIX = role_matrix_path
 
-    # Select the role matrix automatically for configured targets.
-    if not args.role_matrix:
-        ROLE_MATRIX = ROLE_MATRICES.get(
-            TARGET_NAME,
-            ROLE_MATRIX
-        )
+        # Target 3 compatibility.
+        if TARGET_NAME == "Website Target 3":
+            ROLE_MATRIX_TARGET3 = role_matrix_path
 
     REQUEST_TIMEOUT = args.timeout
 
@@ -3228,10 +3430,19 @@ def run_tests():
 
     for role, credentials in ACTIVE_USERS.items():
 
-        token = login(
-            credentials["username"],
-            credentials["password"]
-        )
+        if TARGET_NAME == "Website Target 3":
+
+            token = login(
+                credentials["email"],
+                credentials["password"]
+            )
+
+        else:
+
+            token = login(
+                credentials["username"],
+                credentials["password"]
+            )
 
         tokens[role] = token
 
@@ -3511,10 +3722,19 @@ def run_tests():
 
     for role, credentials in ACTIVE_USERS.items():
 
-        token = login(
-            credentials["username"],
-            credentials["password"]
-        )
+        if TARGET_NAME == "Website Target 3":
+
+            token = login(
+                credentials["email"],
+                credentials["password"]
+            )
+
+        else:
+
+            token = login(
+                credentials["username"],
+                credentials["password"]
+            )
 
         tokens[role] = token
 
