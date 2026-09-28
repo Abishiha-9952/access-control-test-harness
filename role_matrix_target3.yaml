@@ -1,0 +1,106 @@
+roles:
+
+  guest:
+    GET /:
+      access: allow
+
+    POST /api/login:
+      access: allow
+
+    GET /api/profile:
+      access: unauthenticated
+
+    GET /api/users:
+      access: unauthenticated
+
+    GET /api/users/{id}:
+      access: unauthenticated
+
+    POST /api/users:
+      access: unauthenticated
+
+    PUT /api/users/{id}:
+      access: unauthenticated
+
+    DELETE /api/users/{id}:
+      access: unauthenticated
+
+    PUT /api/users/{id}/role:
+      access: unauthenticated
+
+    GET /api/resources:
+      access: unauthenticated
+
+    GET /api/admin/dashboard:
+      access: unauthenticated
+
+
+  user:
+    GET /:
+      access: allow
+
+    POST /api/login:
+      access: allow
+
+    GET /api/profile:
+      access: allow
+
+    GET /api/users:
+      access: deny
+
+    GET /api/users/{id}:
+      access: own
+
+    POST /api/users:
+      access: deny
+
+    PUT /api/users/{id}:
+      access: own
+
+    DELETE /api/users/{id}:
+      access: deny
+
+    PUT /api/users/{id}/role:
+      access: deny
+
+    GET /api/resources:
+      access: allow
+
+    GET /api/admin/dashboard:
+      access: deny
+
+
+  admin:
+    GET /:
+      access: allow
+
+    POST /api/login:
+      access: allow
+
+    GET /api/profile:
+      access: allow
+
+    GET /api/users:
+      access: allow
+
+    GET /api/users/{id}:
+      access: any
+
+    POST /api/users:
+      access: allow
+
+    PUT /api/users/{id}:
+      access: any
+
+    DELETE /api/users/{id}:
+      access: allow
+
+    PUT /api/users/{id}/role:
+      access: allow
+
+    GET /api/resources:
+      access: allow
+
+    GET /api/admin/dashboard:
+      access: allow
+

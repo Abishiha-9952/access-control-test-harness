@@ -1,10 +1,11 @@
+import argparse
 import os
+import sys
 from datetime import datetime
 from html import escape
 
 import requests
 import yaml
-
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
@@ -23,7 +24,6 @@ from reportlab.platypus import (
 # ============================================================
 # TARGET CONFIGURATION
 # ============================================================
-
 TARGETS = {
     "1": {
         "name": "Website Target 1",
@@ -32,8 +32,20 @@ TARGETS = {
     "2": {
         "name": "Website Target 2",
         "url": "http://website-target-2"
+    },
+    "3": {
+        "name": "Website Target 3",
+        "url": "http://127.0.0.1:5002"
+    },
+    "4": {
+        "name": "Live Website",
+        "url": "http://127.0.0.1:3000"
     }
 }
+# ============================================================
+# TARGET SELECTION
+# ============================================================
+
 def select_target():
 
     print()
@@ -44,14 +56,16 @@ def select_target():
     print()
     print("Available targets:")
     print()
-    print("  1. Website Target 1")
-    print("  2. Website Target 2")   
+
+    for key, target in TARGETS.items():
+        print(f"  {key}. {target['name']}")
+
     print()
 
     while True:
 
         choice = input(
-            "Select target [1/2]: "
+            "Select target [1/2/3/4]: "
         ).strip()
 
         if choice in TARGETS:
@@ -69,49 +83,157 @@ def select_target():
 
             print("=" * 60)
 
-            return target["url"], target["name"]
+            return (
+                target["url"],
+                target["name"]
+            )
 
         print()
         print("Invalid choice.")
-        print("Please enter 1 or 2.")
+        print("Please enter 1, 2, 3, or 4.")
         print()
 
+# ============================================================
+# RUNTIME CONFIGURATION
+#
+# These are intentionally initialized without selecting a target.
+# The target is selected by run_tests(), either from CLI arguments
+# or from the interactive menu.
+# ============================================================
 
-# Select target when program starts
-BASE_URL, TARGET_NAME = select_target()
+BASE_URL = None
+TARGET_NAME = None
+
+# ============================================================
+# GENERAL CONFIGURATION
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
+
+ROLE_MATRIX = os.path.join(
+    BASE_DIR,
+    "role_matrix.yaml"
+)
+
+ROLE_MATRIX_TARGET3 = os.path.join(
+    BASE_DIR,
+    "role_matrix_target3.yaml"
+)
+
+REPORT_DIR = os.path.join(
+    BASE_DIR,
+    "reports"
+)
+
+# Report paths are initialized after CLI target selection.
+SAFE_TARGET_NAME = "target"
+HTML_REPORT = None
+PDF_REPORT = None
+
+REQUEST_TIMEOUT = 5
 
 
 # ============================================================
-# CONFIGURATION
+# TEST USERS
+#
+# Credentials can be overridden with environment variables.
 # ============================================================
-
-ROLE_MATRIX = "../role_matrix.yaml"
-
-REPORT_DIR = "reports"
-
-HTML_REPORT = os.path.join(
-    REPORT_DIR,
-    "access_control_report.html"
-)
-
-PDF_REPORT = os.path.join(
-    REPORT_DIR,
-    "access_control_report.pdf"
-)
-
 
 USERS = {
     "admin": {
-        "username": "admin",
-        "password": "admin123",
+        "username": os.getenv(
+            "ADMIN_USERNAME",
+            "admin"
+        ),
+        "password": os.getenv(
+            "ADMIN_PASSWORD",
+            "admin123"
+        ),
     },
 
     "user": {
-        "username": "user1",
-        "password": "user123",
+        "username": os.getenv(
+            "USER_USERNAME",
+            "user1"
+        ),
+        "password": os.getenv(
+            "USER_PASSWORD",
+            "user123"
+        ),
     },
 }
 
+TARGET3_USERS = {
+    "admin": {
+        "email": os.getenv(
+            "TARGET3_ADMIN_EMAIL",
+            "updated@example.com"
+        ),
+        "password": os.getenv(
+            "TARGET3_ADMIN_PASSWORD",
+            "admin123"
+        ),
+    },
+
+    "user": {
+        "email": os.getenv(
+            "TARGET3_USER_EMAIL",
+            "role-test@example.com"
+        ),
+        "password": os.getenv(
+            "TARGET3_USER_PASSWORD",
+            "user123"
+        ),
+    },
+}
+
+
+# ============================================================
+# ACTIVE TEST USERS
+# ============================================================
+
+if TARGET_NAME == "Website Target 3":
+    ACTIVE_USERS = TARGET3_USERS
+else:
+    ACTIVE_USERS = USERS
+
+# ============================================================
+# TEST RESOURCE IDs
+# ============================================================
+
+RESOURCE_IDS_BY_TARGET = {
+    "Website Target 1": {
+        "own_user": "2",
+        "other_user": "3",
+        "own_order": "101",
+        "other_order": "102",
+    },
+
+    "Website Target 2": {
+        "own_user": "2",
+        "other_user": "3",
+        "own_order": "101",
+        "other_order": "102",
+    },
+
+    "Website Target 3": {
+        "own_user": "6",
+        "other_user": "2",
+        "own_order": "101",
+        "other_order": "102",
+    },
+
+    "Live Website": {
+        "own_user": "",
+        "other_user": "",
+        "own_order": "",
+        "other_order": "",
+    },
+}
+
+RESOURCE_IDS = RESOURCE_IDS_BY_TARGET.get(TARGET_NAME, {})
 
 # ============================================================
 # COLOURS
@@ -144,23 +266,63 @@ BORDER = "#CBD5E1"
 WHITE = "#FFFFFF"
 
 
+
 # ============================================================
 # LOAD ROLE MATRIX
-# ============================================================
-
 def load_role_matrix():
 
-    with open(
-        ROLE_MATRIX,
-        "r",
-        encoding="utf-8"
-    ) as file:
+    matrix_file = (
+        ROLE_MATRIX_TARGET3
+        if TARGET_NAME == "Website Target 3"
+        else ROLE_MATRIX
+    )
 
-        return yaml.safe_load(file)
+    try:
 
+        with open(
+            matrix_file,
+            "r",
+            encoding="utf-8"
+        ) as file:
 
+            data = yaml.safe_load(file)
+
+        if not data or "roles" not in data:
+
+            raise ValueError(
+                f"{os.path.basename(matrix_file)} "
+                "does not contain a 'roles' section."
+            )
+
+        return data
+
+    except FileNotFoundError:
+
+        print()
+        print(
+            f"ERROR: {os.path.basename(matrix_file)} not found."
+        )
+        print(
+            f"Expected location: "
+            f"{os.path.abspath(matrix_file)}"
+        )
+        print()
+
+        sys.exit(1)
+
+    except yaml.YAMLError as error:
+
+        print()
+        print(
+            f"ERROR: Invalid YAML in "
+            f"{os.path.basename(matrix_file)}."
+        )
+        print(error)
+        print()
+
+        sys.exit(1)
 # ============================================================
-# CHECK TARGET
+# TARGET CHECK
 # ============================================================
 
 def check_target():
@@ -173,7 +335,7 @@ def check_target():
 
         response = requests.get(
             BASE_URL,
-            timeout=5
+            timeout=REQUEST_TIMEOUT
         )
 
         print(
@@ -195,50 +357,109 @@ def check_target():
         print()
         print(f"URL: {BASE_URL}")
         print()
-        print("Make sure the selected target application")
-        print("is running before starting the harness.")
+        print(
+            "Make sure the selected target application "
+            "is running before starting the harness."
+        )
         print()
         print(f"Details: {error}")
         print("-" * 60)
-
         return False
+
+
 
 
 # ============================================================
 # LOGIN
 # ============================================================
 
-def login(username, password):
+# ============================================================
+# TOKEN TEST
+# ============================================================
 
-    try:
+def get_invalid_token():
 
-        response = requests.post(
-            f"{BASE_URL}/api/login",
+    return "invalid.jwt.token"
 
-            json={
-                "username": username,
-                "password": password,
-            },
+# ============================================================
+# REQUEST DATA
+# ============================================================
 
-            timeout=5,
-        )
+def request_data(
+    method,
+    path,
+    role=None
+):
 
-        if response.status_code != 200:
+    # --------------------------------------------------------
+    # LOGIN
+    # --------------------------------------------------------
 
-            return None
+    if method == "POST" and path == "/api/login":
 
-        try:
+        if TARGET_NAME == "Website Target 3":
 
-            return response.json().get("token")
+            users = TARGET3_USERS
 
-        except ValueError:
+            if role in users:
+                return {
+                    "email": users[role]["email"],
+                    "password": users[role]["password"],
+                }
 
-            return None
+            return {
+                "email": users["user"]["email"],
+                "password": users["user"]["password"],
+            }
 
-    except requests.RequestException:
+        else:
 
-        return None
+            users = USERS
 
+            if role in users:
+                return {
+                    "username": users[role]["username"],
+                    "password": users[role]["password"],
+                }
+
+            return {
+                "username": users["user"]["username"],
+                "password": users["user"]["password"],
+            }
+
+    # --------------------------------------------------------
+    # PATCH
+    # --------------------------------------------------------
+
+    if method == "PATCH":
+
+        return {
+            "email": "updated@example.com"
+        }
+
+    # --------------------------------------------------------
+    # Create user
+    # --------------------------------------------------------
+
+    if method == "POST" and path == "/api/users":
+
+        return {
+            "email": "newuser@example.com",
+            "password": "newpass123",
+            "role": "user"
+        }
+
+    # --------------------------------------------------------
+    # Other PUT requests
+    # --------------------------------------------------------
+
+    if method == "PUT":
+
+        return {
+            "email": "updated@example.com"
+        }
+
+    return None
 
 # ============================================================
 # REQUEST ENDPOINT
@@ -247,58 +468,30 @@ def login(username, password):
 def request_endpoint(
     method,
     path,
-    token=None
+    token=None,
+    invalid_token=False,
+    role=None
 ):
 
     headers = {}
 
-    if token:
+    if invalid_token:
+
+        headers["Authorization"] = (
+            f"Bearer {get_invalid_token()}"
+        )
+
+    elif token:
 
         headers["Authorization"] = (
             f"Bearer {token}"
         )
 
-    data = None
-
-    # --------------------------------------------------------
-    # LOGIN
-    # --------------------------------------------------------
-
-    if (
-        method == "POST"
-        and path == "/api/login"
-    ):
-
-        data = {
-            "username": "admin",
-            "password": "admin123",
-        }
-
-    # --------------------------------------------------------
-    # PATCH
-    # --------------------------------------------------------
-
-    elif method == "PATCH":
-
-        data = {
-            "email": "updated@example.com",
-        }
-
-    # --------------------------------------------------------
-    # POST
-    # --------------------------------------------------------
-
-    elif method == "POST":
-
-        data = {}
-
-    # --------------------------------------------------------
-    # PUT
-    # --------------------------------------------------------
-
-    elif method == "PUT":
-
-        data = {}
+    data = request_data(
+        method,
+        path,
+        role=role
+    )
 
     try:
 
@@ -307,18 +500,105 @@ def request_endpoint(
             f"{BASE_URL}{path}",
             headers=headers,
             json=data,
-            timeout=5,
+            timeout=REQUEST_TIMEOUT,
         )
 
-        return response.status_code
+        return {
+            "status": response.status_code,
+            "error": None,
+        }
 
-    except requests.RequestException:
+    except requests.Timeout:
 
-        return 0
+        return {
+            "status": 0,
+            "error": "Request timeout",
+        }
 
+    except requests.ConnectionError:
+
+        return {
+            "status": 0,
+            "error": "Connection error",
+        }
+
+    except requests.RequestException as error:
+
+        return {
+            "status": 0,
+            "error": str(error),
+        }
 
 # ============================================================
-# BUILD TESTS
+# EXPECTED STATUS
+# ============================================================
+
+def expected_status(
+    access,
+    authenticated=True,
+    method=None,
+    path=None
+):
+
+    if not authenticated:
+
+        return 401
+
+    if access == "deny":
+
+        return 403
+
+    # Successful resource creation
+    if (
+        access in {"allow", "any"}
+        and method == "POST"
+        and path == "/api/users"
+    ):
+
+        return 201
+
+    return 200
+
+# ============================================================
+# CLASSIFY TEST
+# ============================================================
+
+def classify_test(
+    role,
+    method,
+    path,
+    access,
+    category=None
+):
+
+    if category:
+
+        return category
+
+    if not role:
+
+        return "Unknown"
+
+    if "/admin/" in path:
+
+        return "Vertical Authorization"
+
+    if (
+        "{id}" in path
+        or "/users/" in path
+        or "/orders/" in path
+    ):
+
+        return "Horizontal Authorization / IDOR"
+
+    if path == "/api/login":
+
+        return "Authentication"
+
+    return "Authorization"
+
+# ============================================================
+# BUILD MATRIX TESTS
 # ============================================================
 
 def build_tests():
@@ -331,29 +611,36 @@ def build_tests():
 
         for endpoint, rule in endpoints.items():
 
-            method, path = endpoint.split(
-                " ",
-                1
+            parts = endpoint.split(" ", 1)
+
+            if len(parts) != 2:
+                continue
+
+            method, path = parts
+
+            access = rule.get(
+                "access",
+                "allow"
             )
 
             # ------------------------------------------------
-            # Replace user ID
+            # Basic resource replacement
             # ------------------------------------------------
 
             if "{id}" in path:
 
-                if "/users/" in path:
+                if "/orders/" in path:
 
                     path = path.replace(
                         "{id}",
-                        "2"
+                        RESOURCE_IDS["own_order"]
                     )
 
-                elif "/orders/" in path:
+                else:
 
                     path = path.replace(
                         "{id}",
-                        "101"
+                        RESOURCE_IDS["own_user"]
                     )
 
             tests.append(
@@ -361,24 +648,538 @@ def build_tests():
                     "role": role,
                     "method": method,
                     "path": path,
-                    "access": rule["access"],
+                    "access": access,
+                    "category": classify_test(
+                        role,
+                        method,
+                        path,
+                        access
+                    ),
                 }
             )
 
     return tests
 
+# ============================================================
+# BUILD ADDITIONAL SECURITY TESTS
+# ============================================================
+
+def build_security_tests():
+
+    tests = []
+
+    # ========================================================
+    # TARGET 3
+    # ========================================================
+
+    if TARGET_NAME == "Website Target 3":
+
+        # ----------------------------------------------------
+        # Missing authentication
+        # ----------------------------------------------------
+
+        protected_endpoints = [
+
+            ("GET", "/api/profile", "Authentication"),
+
+            ("GET", "/api/users", "Authentication"),
+
+            (
+                "GET",
+                f"/api/users/{RESOURCE_IDS['other_user']}",
+                "Authentication"
+            ),
+
+            ("POST", "/api/users", "Authentication"),
+
+            (
+                "PUT",
+                f"/api/users/{RESOURCE_IDS['other_user']}",
+                "Authentication"
+            ),
+
+            (
+                "DELETE",
+                f"/api/users/{RESOURCE_IDS['other_user']}",
+                "Authentication"
+            ),
+
+            (
+                "PUT",
+                f"/api/users/{RESOURCE_IDS['other_user']}/role",
+                "Authentication"
+            ),
+
+            ("GET", "/api/resources", "Authentication"),
+
+            ("GET", "/api/admin/dashboard", "Authentication"),
+        ]
+
+        for method, path, category in protected_endpoints:
+
+            tests.append(
+                {
+                    "role": "guest",
+                    "method": method,
+                    "path": path,
+                    "access": "unauthenticated",
+                    "category": category,
+                    "authentication": False,
+                    "invalid_token": False,
+                }
+            )
+
+        # ----------------------------------------------------
+        # Invalid JWT
+        # ----------------------------------------------------
+
+        invalid_token_endpoints = [
+
+            ("GET", "/api/profile"),
+
+            ("GET", "/api/users"),
+
+            ("GET", "/api/resources"),
+
+            ("GET", "/api/admin/dashboard"),
+        ]
+
+        for method, path in invalid_token_endpoints:
+
+            tests.append(
+                {
+                    "role": "user",
+                    "method": method,
+                    "path": path,
+                    "access": "invalid_token",
+                    "category": "JWT Validation",
+                    "authentication": False,
+                    "invalid_token": True,
+                }
+            )
+
+        # ----------------------------------------------------
+        # Horizontal Authorization / IDOR
+        # ----------------------------------------------------
+
+        # User tries to read another user's account.
+        tests.append(
+            {
+                "role": "user",
+                "method": "GET",
+                "path": (
+                    f"/api/users/"
+                    f"{RESOURCE_IDS['other_user']}"
+                ),
+                "access": "deny",
+                "category": "Horizontal Authorization / IDOR",
+                "authentication": True,
+                "invalid_token": False,
+                "idor": True,
+            }
+        )
+
+        # User tries to modify another user's account.
+        tests.append(
+            {
+                "role": "user",
+                "method": "PUT",
+                "path": (
+                    f"/api/users/"
+                    f"{RESOURCE_IDS['other_user']}"
+                ),
+                "access": "deny",
+                "category": "Horizontal Authorization / IDOR",
+                "authentication": True,
+                "invalid_token": False,
+                "idor": True,
+            }
+        )
+
+        # User tries to change another user's role.
+        tests.append(
+            {
+                "role": "user",
+                "method": "PUT",
+                "path": (
+                    f"/api/users/"
+                    f"{RESOURCE_IDS['other_user']}/role"
+                ),
+                "access": "deny",
+                "category": "Horizontal Authorization / IDOR",
+                "authentication": True,
+                "invalid_token": False,
+                "idor": True,
+            }
+        )
+
+        return tests
+
+    # ========================================================
+    # TARGET 1 / TARGET 2
+    # ========================================================
+
+    protected_endpoints = [
+
+        (
+            "GET",
+            "/api/me",
+            "Authentication"
+        ),
+
+        (
+            "GET",
+            "/api/admin/users",
+            "Authentication"
+        ),
+
+        (
+            "GET",
+            "/api/admin/stats",
+            "Authentication"
+        ),
+
+        (
+            "GET",
+            "/api/users/2",
+            "Authentication"
+        ),
+
+        (
+            "GET",
+            "/api/orders/101",
+            "Authentication"
+        ),
+    ]
+
+    for method, path, category in protected_endpoints:
+
+        tests.append(
+            {
+                "role": "guest",
+                "method": method,
+                "path": path,
+                "access": "unauthenticated",
+                "category": category,
+                "authentication": False,
+                "invalid_token": False,
+            }
+        )
+
+    # --------------------------------------------------------
+    # Invalid JWT - Target 1 / Target 2
+    # --------------------------------------------------------
+
+    invalid_token_endpoints = [
+
+        ("GET", "/api/me"),
+
+        ("GET", "/api/admin/users"),
+
+        ("GET", "/api/admin/stats"),
+    ]
+
+    for method, path in invalid_token_endpoints:
+
+        tests.append(
+            {
+                "role": "user",
+                "method": method,
+                "path": path,
+                "access": "invalid_token",
+                "category": "JWT Validation",
+                "authentication": False,
+                "invalid_token": True,
+            }
+        )
+
+    # --------------------------------------------------------
+    # IDOR - Target 1 / Target 2
+    # --------------------------------------------------------
+
+    tests.extend(
+        [
+
+            {
+                "role": "user",
+                "method": "GET",
+                "path": (
+                    f"/api/users/"
+                    f"{RESOURCE_IDS['other_user']}"
+                ),
+                "access": "deny",
+                "category": "Horizontal Authorization / IDOR",
+                "authentication": True,
+                "invalid_token": False,
+                "idor": True,
+            },
+
+            {
+                "role": "user",
+                "method": "PATCH",
+                "path": (
+                    f"/api/users/"
+                    f"{RESOURCE_IDS['other_user']}"
+                ),
+                "access": "deny",
+                "category": "Horizontal Authorization / IDOR",
+                "authentication": True,
+                "invalid_token": False,
+                "idor": True,
+            },
+
+            {
+                "role": "user",
+                "method": "GET",
+                "path": (
+                    f"/api/orders/"
+                    f"{RESOURCE_IDS['other_order']}"
+                ),
+                "access": "deny",
+                "category": "Horizontal Authorization / IDOR",
+                "authentication": True,
+                "invalid_token": False,
+                "idor": True,
+            },
+        ]
+    )
+
+    return tests
+
+
+
 
 # ============================================================
-# EXPECTED STATUS
+# COMBINE TESTS
 # ============================================================
 
-def expected_status(access):
+def generate_all_tests():
 
-    if access == "deny":
+    tests = build_tests()
 
-        return 403
+    security_tests = build_security_tests()
 
-    return 200
+    return tests + security_tests
+
+
+
+def resolve_path_parameters(path, test):
+    """
+    Replace OpenAPI path parameters such as {id} with test values.
+    """
+
+    if "{id}" in path:
+
+        if test.get("idor"):
+            return path.replace(
+                "{id}",
+                str(RESOURCE_IDS["other_user"])
+            )
+
+        return path.replace(
+            "{id}",
+            str(RESOURCE_IDS["own_user"])
+        )
+
+    return path
+
+
+# ============================================================
+# TEST EXECUTION
+# ============================================================
+
+def execute_test(
+    test,
+    tokens
+):
+
+    role = test["role"]
+
+    authentication = test.get(
+        "authentication",
+        True
+    )
+
+    invalid_token = test.get(
+        "invalid_token",
+        False
+    )
+    access = test["access"]
+
+    if access == "unauthenticated":
+
+        expected = 401
+        token = None
+
+    elif access == "invalid_token":
+
+        expected = 401
+        token = None
+
+    else:
+
+        expected = expected_status(
+            access,
+            authentication,
+            method=test["method"],
+            path=test["path"]
+        )
+
+        token = tokens.get(role)
+
+        # An authenticated test cannot be evaluated when the
+        # corresponding role failed to authenticate.
+        if (
+            role != "guest"
+            and authentication
+            and not invalid_token
+            and not token
+        ):
+            return {
+                "id": test.get("id", ""),
+                "role": role,
+                "method": test["method"],
+                "path": test["path"],
+                "access": access,
+                "category": test.get(
+                    "category",
+                    "Authorization"
+                ),
+                "expected": expected,
+                "actual": None,
+                "passed": None,
+                "error": (
+                    f"{role} authentication failed; "
+                    "authenticated authorization test "
+                    "cannot be evaluated"
+                ),
+                "idor": test.get("idor", False),
+                "status": "SKIP",
+            }
+
+    request_path = resolve_path_parameters(
+        test["path"],
+        test
+    )
+
+    response = request_endpoint(
+        test["method"],
+        request_path,
+        token=token,
+        invalid_token=invalid_token,
+        role=role
+    )
+
+    actual = response["status"]
+
+    passed = (
+        actual == expected
+    )
+
+    return {
+        "id": test.get(
+            "id",
+            ""
+        ),
+        "role": role,
+        "method": test["method"],
+        "path": test["path"],
+        "access": access,
+        "category": test.get(
+            "category",
+            "Authorization"
+        ),
+        "expected": expected,
+        "actual": actual,
+        "passed": passed,
+        "error": response["error"],
+        "idor": test.get(
+            "idor",
+            False
+        ),
+    }
+
+# ============================================================
+# ADD TEST IDs
+# ============================================================
+
+def assign_test_ids(tests):
+
+    for index, test in enumerate(
+        tests,
+        start=1
+    ):
+
+        test["id"] = (
+            f"AC-{index:03d}"
+        )
+
+    return tests
+
+
+
+def load_openapi_tests(openapi_file):
+    """
+    Load security tests generated from an OpenAPI specification
+    and convert them to the format expected by execute_test().
+    """
+
+    try:
+        # Package execution:
+        # python3 -m harness
+        from .openapi_test_generator import generate_security_tests
+    except ImportError:
+        # Direct script execution:
+        # python3 harness/test_runner.py
+        from openapi_test_generator import generate_security_tests
+
+    test_data = generate_security_tests(openapi_file)
+
+    tests = []
+
+    for test in test_data["tests"]:
+
+        category = test.get(
+            "category",
+            "Authorization"
+        )
+
+        access = test.get(
+            "access",
+            "allow"
+        )
+
+        tests.append({
+            "id": test.get("id", ""),
+            "role": test.get("role", "user"),
+            "category": category,
+            "method": test["method"],
+            "path": test["path"],
+            "access": access,
+
+            "authentication": (
+                category == "Authentication"
+                or test.get("role") != "guest"
+            ),
+
+            "invalid_token": False,
+
+            "idor": (
+                "IDOR" in category
+                or "Horizontal" in category
+            ),
+
+            "operation_id": test.get(
+                "operation_id"
+            ),
+
+            "summary": test.get(
+                "summary",
+                ""
+            ),
+        })
+
+    return tests
 
 
 # ============================================================
@@ -409,6 +1210,34 @@ def generate_html_report(
         overall_text = "✗ FAIL"
         overall_class = "danger"
 
+    category_counts = {}
+
+    for result in results:
+
+        category = result["category"]
+
+        if category not in category_counts:
+
+            category_counts[category] = {
+                "total": 0,
+                "passed": 0,
+                "failed": 0,
+            }
+
+        category_counts[category]["total"] += 1
+
+        if result.get("status") == "SKIP":
+
+            result_text = "SKIP"
+
+        elif result["passed"]:
+
+            category_counts[category]["passed"] += 1
+
+        else:
+
+            category_counts[category]["failed"] += 1
+
     rows = ""
 
     for result in results:
@@ -423,37 +1252,53 @@ def generate_html_report(
             status_text = "✗ FAIL"
             status_class = "fail"
 
+        error_text = (
+            result["error"]
+            if result["error"]
+            else ""
+        )
+
         rows += f"""
         <tr>
 
             <td>
-                <span class="role {escape(result['role'])}">
-                    {escape(result['role'].upper())}
+                {escape(result["id"])}
+            </td>
+
+            <td>
+                <span class="role {escape(result["role"])}">
+                    {escape(result["role"].upper())}
+                </span>
+            </td>
+
+            <td>
+                <span class="category">
+                    {escape(result["category"])}
                 </span>
             </td>
 
             <td>
                 <span class="method">
-                    {escape(result['method'])}
+                    {escape(result["method"])}
                 </span>
             </td>
 
             <td class="endpoint">
-                {escape(result['path'])}
+                {escape(result["path"])}
             </td>
 
             <td>
                 <span class="rule">
-                    {escape(result['access'])}
+                    {escape(result["access"])}
                 </span>
             </td>
 
             <td class="code">
-                {result['expected']}
+                {result["expected"]}
             </td>
 
             <td class="code">
-                {result['actual']}
+                {result["actual"]}
             </td>
 
             <td>
@@ -462,6 +1307,23 @@ def generate_html_report(
                 </span>
             </td>
 
+            <td>
+                {escape(error_text)}
+            </td>
+
+        </tr>
+        """
+
+    category_rows = ""
+
+    for category, values in category_counts.items():
+
+        category_rows += f"""
+        <tr>
+            <td>{escape(category)}</td>
+            <td>{values["total"]}</td>
+            <td>{values["passed"]}</td>
+            <td>{values["failed"]}</td>
         </tr>
         """
 
@@ -477,7 +1339,7 @@ def generate_html_report(
       content="width=device-width, initial-scale=1.0">
 
 <title>
-    Access Control Security Report
+Access Control Security Report
 </title>
 
 <style>
@@ -509,13 +1371,10 @@ body {{
 
     width: 94%;
 
-    max-width: 1400px;
+    max-width: 1500px;
 
     margin: 35px auto;
 }}
-
-
-/* HEADER */
 
 .header {{
 
@@ -555,15 +1414,9 @@ body {{
     font-size: 20px;
 
     font-weight: normal;
-
-    opacity: 0.92;
 }}
 
 .header p {{
-
-    margin-top: 15px;
-
-    opacity: 0.85;
 
     line-height: 1.6;
 }}
@@ -572,21 +1425,13 @@ body {{
 
     display: inline-block;
 
-    margin-top: 15px;
-
     padding: 8px 14px;
 
-    background: rgba(255,255,255,0.15);
-
-    border: 1px solid rgba(255,255,255,0.25);
+    background:
+        rgba(255,255,255,0.15);
 
     border-radius: 20px;
-
-    font-weight: bold;
 }}
-
-
-/* SUMMARY */
 
 .summary {{
 
@@ -632,18 +1477,12 @@ body {{
 
 .card h3 {{
 
-    margin: 0;
-
     font-size: 12px;
 
     color: {SLATE};
-
-    letter-spacing: 1px;
 }}
 
 .number {{
-
-    margin-top: 8px;
 
     font-size: 36px;
 
@@ -661,9 +1500,6 @@ body {{
 .red {{
     color: {RED};
 }}
-
-
-/* SECTION */
 
 .section {{
 
@@ -691,73 +1527,13 @@ body {{
     margin-bottom: 20px;
 }}
 
-
-/* COVERAGE */
-
-.coverage {{
-
-    display: grid;
-
-    grid-template-columns:
-        repeat(2, 1fr);
-
-    gap: 16px;
-}}
-
-.coverage-card {{
-
-    padding: 20px;
-
-    border-radius: 13px;
-
-    background: {LIGHTER_BLUE};
-
-    border-left:
-        5px solid {GREEN};
-}}
-
-.coverage-card .icon {{
-
-    font-size: 25px;
-
-    color: {GREEN};
-
-    float: left;
-
-    margin-right: 12px;
-}}
-
-.coverage-card h3 {{
-
-    margin: 0;
-
-    color: {NAVY};
-}}
-
-.coverage-card p {{
-
-    color: {SLATE};
-
-    line-height: 1.5;
-
-    margin-bottom: 0;
-}}
-
-
-/* TABLE */
-
-.table-container {{
-
-    overflow-x: auto;
-}}
-
 table {{
 
     width: 100%;
 
     border-collapse: collapse;
 
-    font-size: 14px;
+    font-size: 13px;
 }}
 
 thead {{
@@ -774,18 +1550,14 @@ thead {{
 
 th {{
 
-    padding: 15px;
+    padding: 12px;
 
     text-align: left;
-
-    font-size: 12px;
-
-    letter-spacing: 0.5px;
 }}
 
 td {{
 
-    padding: 13px 15px;
+    padding: 11px;
 
     border-bottom:
         1px solid #e2e8f0;
@@ -812,16 +1584,17 @@ tbody tr:hover {{
     font-weight: bold;
 }}
 
-
-/* BADGES */
-
-.role {{
+.role,
+.category,
+.method,
+.rule,
+.result {{
 
     display: inline-block;
 
-    padding: 6px 11px;
+    padding: 5px 9px;
 
-    border-radius: 20px;
+    border-radius: 8px;
 
     font-size: 10px;
 
@@ -849,43 +1622,25 @@ tbody tr:hover {{
     color: #475569;
 }}
 
+.category {{
+
+    background: #ede9fe;
+
+    color: #6d28d9;
+}}
+
 .method {{
 
     background: #e0e7ff;
 
     color: #3730a3;
-
-    padding: 6px 10px;
-
-    border-radius: 6px;
-
-    font-size: 10px;
-
-    font-weight: bold;
 }}
 
 .rule {{
 
     background: #f1f5f9;
 
-    padding: 6px 10px;
-
-    border-radius: 6px;
-
-    font-size: 10px;
-}}
-
-.result {{
-
-    display: inline-block;
-
-    padding: 7px 13px;
-
-    border-radius: 20px;
-
-    font-size: 10px;
-
-    font-weight: bold;
+    color: #334155;
 }}
 
 .result.pass {{
@@ -902,9 +1657,6 @@ tbody tr:hover {{
     color: #991b1b;
 }}
 
-
-/* CONCLUSION */
-
 .conclusion {{
 
     padding: 25px;
@@ -920,17 +1672,7 @@ tbody tr:hover {{
 
     color:
         {GREEN_DARK if failed == 0 else RED_DARK};
-
-    margin-bottom: 25px;
 }}
-
-.conclusion h2 {{
-
-    margin-top: 0;
-}}
-
-
-/* FOOTER */
 
 .footer {{
 
@@ -943,10 +1685,7 @@ tbody tr:hover {{
     padding: 20px;
 }}
 
-
-/* RESPONSIVE */
-
-@media (max-width: 900px) {{
+@media (max-width: 1000px) {{
 
     .summary {{
 
@@ -954,11 +1693,6 @@ tbody tr:hover {{
             repeat(2, 1fr);
     }}
 
-    .coverage {{
-
-        grid-template-columns:
-            1fr;
-    }}
 }}
 
 @media (max-width: 600px) {{
@@ -969,10 +1703,6 @@ tbody tr:hover {{
             1fr;
     }}
 
-    .header h1 {{
-
-        font-size: 25px;
-    }}
 }}
 
 </style>
@@ -983,269 +1713,217 @@ tbody tr:hover {{
 
 <div class="container">
 
-
 <div class="header">
 
-    <h1>
-        🔐 AUTOMATED ACCESS CONTROL
-    </h1>
+<h1>
+🔐 AUTOMATED ACCESS CONTROL
+</h1>
 
-    <h2>
-        SECURITY TEST REPORT
-    </h2>
+<h2>
+SECURITY TEST REPORT
+</h2>
 
-    <p>
-        Role-Based Authorization
-        • JWT Authentication
-        • Horizontal Access Control
-        • Vertical Access Control
-    </p>
+<p>
+Role-Based Authorization
+• JWT Authentication
+• Vertical Authorization
+• Horizontal Authorization / IDOR
+• Invalid JWT Testing
+</p>
 
-    <div class="target-badge">
-        Testing: {escape(TARGET_NAME)}
-        &nbsp; • &nbsp;
-        {escape(BASE_URL)}
-    </div>
+<div class="target-badge">
 
-    <p>
-        <strong>Generated:</strong>
-        {escape(generated_time)}
-    </p>
+Testing:
+{escape(TARGET_NAME)}
+
+&nbsp; • &nbsp;
+
+{escape(BASE_URL)}
+
+</div>
+
+<p>
+<strong>Generated:</strong>
+{escape(generated_time)}
+</p>
 
 </div>
 
 
 <div class="summary">
 
-    <div class="card">
+<div class="card">
 
-        <h3>
-            TOTAL TESTS
-        </h3>
+<h3>TOTAL TESTS</h3>
 
-        <div class="number blue">
-            {total}
-        </div>
+<div class="number blue">
+{total}
+</div>
 
-    </div>
+</div>
 
+<div class="card passed">
 
-    <div class="card passed">
+<h3>PASSED</h3>
 
-        <h3>
-            PASSED
-        </h3>
+<div class="number green">
+{passed}
+</div>
 
-        <div class="number green">
-            {passed}
-        </div>
+</div>
 
-    </div>
+<div class="card failed">
 
+<h3>FAILED</h3>
 
-    <div class="card failed">
+<div class="number red">
+{failed}
+</div>
 
-        <h3>
-            FAILED
-        </h3>
+</div>
 
-        <div class="number red">
-            {failed}
-        </div>
+<div class="card overall">
 
-    </div>
+<h3>OVERALL STATUS</h3>
 
+<div class="number
+{'green' if failed == 0 else 'red'}">
 
-    <div class="card overall">
+{overall_text}
 
-        <h3>
-            OVERALL STATUS
-        </h3>
+</div>
 
-        <div class="number
-            {'green' if failed == 0 else 'red'}">
-
-            {overall_text}
-
-        </div>
-
-    </div>
+</div>
 
 </div>
 
 
 <div class="section">
 
-    <div class="section-title">
-        🛡️ SECURITY COVERAGE
-    </div>
+<div class="section-title">
+SECURITY TEST CATEGORIES
+</div>
 
-    <div class="coverage">
+<table>
 
-        <div class="coverage-card">
+<thead>
 
-            <div class="icon">
-                ✓
-            </div>
+<tr>
 
-            <h3>
-                Vertical Access Control
-            </h3>
+<th>Category</th>
+<th>Total</th>
+<th>Passed</th>
+<th>Failed</th>
 
-            <p>
-                Tests lower-privileged users attempting
-                administrator-only operations.
-            </p>
+</tr>
 
-        </div>
+</thead>
 
+<tbody>
 
-        <div class="coverage-card">
+{category_rows}
 
-            <div class="icon">
-                ✓
-            </div>
+</tbody>
 
-            <h3>
-                Horizontal Access Control / IDOR
-            </h3>
-
-            <p>
-                Tests ownership-based access to
-                user profiles and orders.
-            </p>
-
-        </div>
-
-
-        <div class="coverage-card">
-
-            <div class="icon">
-                ✓
-            </div>
-
-            <h3>
-                JWT Authentication
-            </h3>
-
-            <p>
-                Authenticated requests are sent using
-                Bearer JWT authorization tokens.
-            </p>
-
-        </div>
-
-
-        <div class="coverage-card">
-
-            <div class="icon">
-                ✓
-            </div>
-
-            <h3>
-                Role Permission Matrix
-            </h3>
-
-            <p>
-                Expected authorization rules are loaded
-                automatically from role_matrix.yaml.
-            </p>
-
-        </div>
-
-    </div>
+</table>
 
 </div>
 
 
 <div class="section">
 
-    <div class="section-title">
-        📋 DETAILED TEST RESULTS
-    </div>
+<div class="section-title">
+DETAILED TEST RESULTS
+</div>
 
-    <div class="table-container">
+<div style="overflow-x:auto">
 
-        <table>
+<table>
 
-            <thead>
+<thead>
 
-                <tr>
+<tr>
 
-                    <th>ROLE</th>
-                    <th>METHOD</th>
-                    <th>ENDPOINT</th>
-                    <th>RULE</th>
-                    <th>EXPECTED</th>
-                    <th>ACTUAL</th>
-                    <th>RESULT</th>
+<th>ID</th>
+<th>ROLE</th>
+<th>CATEGORY</th>
+<th>METHOD</th>
+<th>ENDPOINT</th>
+<th>RULE</th>
+<th>EXPECTED</th>
+<th>ACTUAL</th>
+<th>RESULT</th>
+<th>ERROR</th>
 
-                </tr>
+</tr>
 
-            </thead>
+</thead>
 
-            <tbody>
+<tbody>
 
-                {rows}
+{rows}
 
-            </tbody>
+</tbody>
 
-        </table>
+</table>
 
-    </div>
+</div>
 
 </div>
 
 
 <div class="conclusion">
 
-    <h2>
+<h2>
 
-        {
-            '✓ Security Test Passed'
-            if failed == 0
-            else
-            '✗ Security Test Failed'
-        }
+{
+'✓ Security Test Passed'
+if failed == 0
+else
+'✗ Security Test Failed'
+}
 
-    </h2>
+</h2>
 
-    <p>
+<p>
 
-        <strong>{total}</strong>
-        automated authorization tests were executed.
+<strong>{total}</strong>
+automated security tests were executed.
 
-        <strong>{passed}</strong>
-        tests passed and
+<strong>{passed}</strong>
+tests passed and
 
-        <strong>{failed}</strong>
-        tests failed.
+<strong>{failed}</strong>
+tests failed.
 
-    </p>
+</p>
 
-    <p>
+<p>
 
-        The actual HTTP responses were compared against
-        the expected permissions defined in the role matrix.
+The harness tested authentication,
+vertical authorization,
+horizontal authorization / IDOR,
+JWT validation, and the configured
+role-permission matrix.
 
-    </p>
+</p>
 
 </div>
 
 
 <div class="footer">
 
-    Automated Access Control Test Harness
+Automated Access Control Test Harness
 
-    <br>
+<br>
 
-    {escape(TARGET_NAME)}
-    •
-    Role-Based Access Control
-    •
-    JWT
-    •
-    IDOR Testing
+{escape(TARGET_NAME)}
+•
+Role-Based Access Control
+•
+JWT
+•
+IDOR Testing
 
 </div>
 
@@ -1268,7 +1946,11 @@ tbody tr:hover {{
     print("=" * 60)
     print("HTML REPORT CREATED")
     print("=" * 60)
-    print(f"Report: {HTML_REPORT}")
+
+    print(
+        f"Report: {HTML_REPORT}"
+    )
+
     print("=" * 60)
 
 
@@ -1278,7 +1960,9 @@ tbody tr:hover {{
 
 def pdf_color(hex_color):
 
-    return colors.HexColor(hex_color)
+    return colors.HexColor(
+        hex_color
+    )
 
 
 def create_badge(
@@ -1402,10 +2086,14 @@ def method_badge(method):
 
 def rule_badge(rule):
 
-    if rule == "deny":
+    if rule in {
+        "deny",
+        "unauthenticated",
+        "invalid_token"
+    }:
 
         return create_badge(
-            "deny",
+            rule,
             "#FEE2E2",
             "#991B1B",
             6.2
@@ -1480,8 +2168,8 @@ def generate_pdf_report(
         "PDFTitle",
         parent=styles["Title"],
         fontName="Helvetica-Bold",
-        fontSize=21,
-        leading=24,
+        fontSize=20,
+        leading=23,
         textColor=colors.white,
         alignment=TA_LEFT,
     )
@@ -1490,26 +2178,17 @@ def generate_pdf_report(
         "PDFSubtitle",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=9,
-        leading=12,
+        fontSize=8,
+        leading=11,
         textColor=colors.HexColor("#DBEAFE"),
-    )
-
-    date_style = ParagraphStyle(
-        "PDFDate",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=7.5,
-        leading=10,
-        textColor=colors.HexColor("#BFDBFE"),
     )
 
     section_style = ParagraphStyle(
         "PDFSection",
         parent=styles["Heading2"],
         fontName="Helvetica-Bold",
-        fontSize=13,
-        leading=16,
+        fontSize=12,
+        leading=15,
         textColor=pdf_color(NAVY),
         spaceBefore=5,
         spaceAfter=8,
@@ -1519,8 +2198,8 @@ def generate_pdf_report(
         "PDFBody",
         parent=styles["BodyText"],
         fontName="Helvetica",
-        fontSize=7.7,
-        leading=10.5,
+        fontSize=7.5,
+        leading=10,
         textColor=pdf_color(DARK),
     )
 
@@ -1528,8 +2207,8 @@ def generate_pdf_report(
         "PDFEndpoint",
         parent=styles["BodyText"],
         fontName="Courier",
-        fontSize=6.5,
-        leading=8,
+        fontSize=5.7,
+        leading=7,
         textColor=colors.HexColor("#1E3A8A"),
     )
 
@@ -1537,8 +2216,8 @@ def generate_pdf_report(
         "PDFTableHeader",
         parent=styles["Normal"],
         fontName="Helvetica-Bold",
-        fontSize=6.2,
-        leading=7,
+        fontSize=5.5,
+        leading=6.5,
         textColor=colors.white,
         alignment=TA_CENTER,
     )
@@ -1547,46 +2226,40 @@ def generate_pdf_report(
         "PDFTableText",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=6.2,
-        leading=7.5,
+        fontSize=5.5,
+        leading=6.5,
         textColor=pdf_color(DARK),
         alignment=TA_CENTER,
-    )
-
-    table_endpoint_style = ParagraphStyle(
-        "PDFTableEndpoint",
-        parent=table_text_style,
-        fontName="Courier",
-        fontSize=5.9,
-        leading=7,
-    )
-
-    small_style = ParagraphStyle(
-        "PDFSmall",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=7,
-        leading=9,
-        textColor=pdf_color(SLATE),
     )
 
     conclusion_style = ParagraphStyle(
         "PDFConclusion",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=8,
-        leading=12,
+        fontSize=7.5,
+        leading=10,
         textColor=pdf_color(
-            GREEN_DARK if failed == 0 else RED_DARK
+            GREEN_DARK
+            if failed == 0
+            else RED_DARK
         ),
+    )
+
+    small_style = ParagraphStyle(
+        "PDFSmall",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=6.5,
+        leading=8,
+        textColor=pdf_color(SLATE),
     )
 
     doc = SimpleDocTemplate(
         PDF_REPORT,
         pagesize=A4,
-        leftMargin=13 * mm,
-        rightMargin=13 * mm,
-        topMargin=13 * mm,
+        leftMargin=10 * mm,
+        rightMargin=10 * mm,
+        topMargin=10 * mm,
         bottomMargin=18 * mm,
     )
 
@@ -1620,10 +2293,9 @@ def generate_pdf_report(
             ],
             [
                 Paragraph(
-                    "Role-Based Authorization &nbsp;•&nbsp; "
-                    "JWT Authentication &nbsp;•&nbsp; "
-                    "Horizontal Access Control &nbsp;•&nbsp; "
-                    "Vertical Access Control",
+                    "RBAC • JWT • Vertical Authorization "
+                    "• Horizontal Authorization / IDOR "
+                    "• JWT Validation",
                     subtitle_style
                 )
             ],
@@ -1631,11 +2303,11 @@ def generate_pdf_report(
                 Paragraph(
                     f"<b>Generated:</b> "
                     f"{escape(generated_time)}",
-                    date_style
+                    subtitle_style
                 )
             ],
         ],
-        colWidths=[184 * mm],
+        colWidths=[190 * mm],
     )
 
     header.setStyle(
@@ -1651,45 +2323,35 @@ def generate_pdf_report(
                     "LEFTPADDING",
                     (0, 0),
                     (-1, -1),
-                    14
+                    12
                 ),
                 (
                     "RIGHTPADDING",
                     (0, 0),
                     (-1, -1),
-                    14
+                    12
                 ),
                 (
                     "TOPPADDING",
                     (0, 0),
                     (-1, 0),
-                    12
-                ),
-                (
-                    "TOPPADDING",
-                    (0, 1),
-                    (-1, -1),
-                    2
+                    10
                 ),
                 (
                     "BOTTOMPADDING",
                     (0, 4),
                     (-1, 4),
-                    12
-                ),
-                (
-                    "LINEBELOW",
-                    (0, 0),
-                    (-1, 0),
-                    2,
-                    pdf_color(BLUE)
+                    10
                 ),
             ]
         )
     )
 
     story.append(header)
-    story.append(Spacer(1, 8))
+
+    story.append(
+        Spacer(1, 8)
+    )
 
     # --------------------------------------------------------
     # SUMMARY
@@ -1698,8 +2360,8 @@ def generate_pdf_report(
     summary_header_style = ParagraphStyle(
         "SummaryHeader",
         fontName="Helvetica-Bold",
-        fontSize=6.5,
-        leading=8,
+        fontSize=6,
+        leading=7,
         textColor=pdf_color(SLATE),
         alignment=TA_CENTER,
     )
@@ -1707,8 +2369,8 @@ def generate_pdf_report(
     summary_number_style = ParagraphStyle(
         "SummaryNumber",
         fontName="Helvetica-Bold",
-        fontSize=19,
-        leading=21,
+        fontSize=17,
+        leading=19,
         alignment=TA_CENTER,
     )
 
@@ -1716,7 +2378,7 @@ def generate_pdf_report(
         [
             [
                 Paragraph(
-                    "TOTAL TESTS",
+                    "TOTAL",
                     summary_header_style
                 ),
                 Paragraph(
@@ -1728,7 +2390,7 @@ def generate_pdf_report(
                     summary_header_style
                 ),
                 Paragraph(
-                    "OVERALL STATUS",
+                    "STATUS",
                     summary_header_style
                 ),
             ],
@@ -1774,10 +2436,10 @@ def generate_pdf_report(
             ],
         ],
         colWidths=[
-            46 * mm,
-            46 * mm,
-            46 * mm,
-            46 * mm,
+            47.5 * mm,
+            47.5 * mm,
+            47.5 * mm,
+            47.5 * mm,
         ],
     )
 
@@ -1789,12 +2451,6 @@ def generate_pdf_report(
                     (0, 0),
                     (-1, 0),
                     pdf_color(LIGHT_BLUE)
-                ),
-                (
-                    "BACKGROUND",
-                    (0, 1),
-                    (0, 1),
-                    pdf_color("#F0F7FF")
                 ),
                 (
                     "BACKGROUND",
@@ -1841,101 +2497,145 @@ def generate_pdf_report(
                 (
                     "TOPPADDING",
                     (0, 0),
-                    (-1, 0),
-                    7
+                    (-1, -1),
+                    6
                 ),
                 (
                     "BOTTOMPADDING",
                     (0, 0),
-                    (-1, 0),
-                    7
-                ),
-                (
-                    "TOPPADDING",
-                    (0, 1),
-                    (-1, 1),
-                    8
-                ),
-                (
-                    "BOTTOMPADDING",
-                    (0, 1),
-                    (-1, 1),
-                    8
+                    (-1, -1),
+                    6
                 ),
             ]
         )
     )
 
     story.append(summary)
-    story.append(Spacer(1, 10))
+
+    story.append(
+        Spacer(1, 10)
+    )
 
     # --------------------------------------------------------
-    # SECURITY COVERAGE
+    # SECURITY TEST CATEGORIES
     # --------------------------------------------------------
+
+    category_stats = {}
+
+    for result in results:
+
+        category = result.get(
+            "category",
+            "Authorization"
+        )
+
+        if category not in category_stats:
+            category_stats[category] = {
+                "total": 0,
+                "passed": 0,
+                "failed": 0,
+            }
+
+        category_stats[category]["total"] += 1
+
+        if result.get("passed"):
+            category_stats[category]["passed"] += 1
+        else:
+            category_stats[category]["failed"] += 1
 
     story.append(
         Paragraph(
-            "SECURITY COVERAGE",
+            "SECURITY TEST CATEGORIES",
             section_style
         )
     )
 
-    coverage_style = ParagraphStyle(
-        "Coverage",
-        parent=body_style,
-        fontSize=7.2,
-        leading=10,
-    )
-
-    coverage = Table(
+    category_table_data = [
         [
+            Paragraph("CATEGORY", table_header_style),
+            Paragraph("TOTAL", table_header_style),
+            Paragraph("PASSED", table_header_style),
+            Paragraph("FAILED", table_header_style),
+        ]
+    ]
+
+    category_order = [
+        "Authentication",
+        "Authorization",
+        "Horizontal Authorization / IDOR",
+    ]
+
+    for category in category_order:
+
+        if category not in category_stats:
+            continue
+
+        stats = category_stats[category]
+
+        category_table_data.append(
             [
                 Paragraph(
-                    "<b><font color='#16A34A'>✓</font> "
-                    "Vertical Access Control</b><br/>"
-                    "Tests lower-privileged users attempting "
-                    "administrator-only operations.",
-                    coverage_style
+                    escape(category),
+                    table_text_style
                 ),
                 Paragraph(
-                    "<b><font color='#16A34A'>✓</font> "
-                    "Horizontal Access Control / IDOR</b><br/>"
-                    "Tests ownership-based access to "
-                    "user profiles and orders.",
-                    coverage_style
-                ),
-            ],
-            [
-                Paragraph(
-                    "<b><font color='#16A34A'>✓</font> "
-                    "JWT Authentication</b><br/>"
-                    "Authenticated requests use "
-                    "Bearer JWT authorization tokens.",
-                    coverage_style
+                    str(stats["total"]),
+                    table_text_style
                 ),
                 Paragraph(
-                    "<b><font color='#16A34A'>✓</font> "
-                    "Role Permission Matrix</b><br/>"
-                    "Expected authorization rules are loaded "
-                    "automatically from role_matrix.yaml.",
-                    coverage_style
+                    str(stats["passed"]),
+                    table_text_style
                 ),
-            ],
-        ],
+                Paragraph(
+                    str(stats["failed"]),
+                    table_text_style
+                ),
+            ]
+        )
+
+    category_table = Table(
+        category_table_data,
         colWidths=[
-            92 * mm,
-            92 * mm,
+            280,
+            70,
+            70,
+            70,
         ],
+        repeatRows=1,
     )
 
-    coverage.setStyle(
+    category_table.setStyle(
         TableStyle(
             [
                 (
                     "BACKGROUND",
                     (0, 0),
-                    (-1, -1),
-                    pdf_color(LIGHTER_BLUE)
+                    (-1, 0),
+                    pdf_color(NAVY)
+                ),
+                (
+                    "TEXTCOLOR",
+                    (0, 0),
+                    (-1, 0),
+                    pdf_color(WHITE)
+                ),
+                (
+                    "BACKGROUND",
+                    (1, 1),
+                    (1, -1),
+                    pdf_color(LIGHT_BLUE)
+                ),
+                (
+                    "BACKGROUND",
+                    (2, 1),
+                    (2, -1),
+                    pdf_color(LIGHT_GREEN)
+                ),
+                (
+                    "BACKGROUND",
+                    (3, 1),
+                    (3, -1),
+                    pdf_color(LIGHT_RED)
                 ),
                 (
                     "BOX",
@@ -1948,32 +2648,8 @@ def generate_pdf_report(
                     "INNERGRID",
                     (0, 0),
                     (-1, -1),
-                    0.4,
+                    0.35,
                     pdf_color(BORDER)
-                ),
-                (
-                    "LEFTPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    9
-                ),
-                (
-                    "RIGHTPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    9
-                ),
-                (
-                    "TOPPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    9
-                ),
-                (
-                    "BOTTOMPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    9
                 ),
                 (
                     "VALIGN",
@@ -1981,12 +2657,27 @@ def generate_pdf_report(
                     (-1, -1),
                     "MIDDLE"
                 ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    6
+                ),
             ]
         )
     )
 
-    story.append(coverage)
-    story.append(Spacer(1, 10))
+    story.append(category_table)
+
+    story.append(
+        Spacer(1, 14)
+    )
 
     # --------------------------------------------------------
     # DETAILED RESULTS
@@ -1994,19 +2685,21 @@ def generate_pdf_report(
 
     story.append(
         Paragraph(
-            "DETAILED TEST RESULTS",
+            "DETAILED SECURITY TEST RESULTS",
             section_style
         )
     )
 
     table_data = [
         [
+            Paragraph("ID", table_header_style),
             Paragraph("ROLE", table_header_style),
+            Paragraph("CATEGORY", table_header_style),
             Paragraph("METHOD", table_header_style),
             Paragraph("ENDPOINT", table_header_style),
             Paragraph("RULE", table_header_style),
-            Paragraph("EXPECTED", table_header_style),
-            Paragraph("ACTUAL", table_header_style),
+            Paragraph("EXP.", table_header_style),
+            Paragraph("ACT.", table_header_style),
             Paragraph("RESULT", table_header_style),
         ]
     ]
@@ -2015,7 +2708,19 @@ def generate_pdf_report(
 
         table_data.append(
             [
-                role_badge(result["role"]),
+                Paragraph(
+                    escape(result["id"]),
+                    table_text_style
+                ),
+
+                role_badge(
+                    result["role"]
+                ),
+
+                Paragraph(
+                    escape(result["category"]),
+                    table_text_style
+                ),
 
                 method_badge(
                     result["method"]
@@ -2023,7 +2728,7 @@ def generate_pdf_report(
 
                 Paragraph(
                     escape(result["path"]),
-                    table_endpoint_style
+                    endpoint_style
                 ),
 
                 rule_badge(
@@ -2049,13 +2754,15 @@ def generate_pdf_report(
     result_table = Table(
         table_data,
         colWidths=[
+            14 * mm,
+            19 * mm,
+            32 * mm,
+            17 * mm,
+            43 * mm,
+            19 * mm,
+            11 * mm,
+            11 * mm,
             22 * mm,
-            21 * mm,
-            55 * mm,
-            21 * mm,
-            20 * mm,
-            20 * mm,
-            25 * mm,
         ],
         repeatRows=1,
         hAlign="CENTER",
@@ -2071,16 +2778,10 @@ def generate_pdf_report(
                     pdf_color(NAVY)
                 ),
                 (
-                    "TEXTCOLOR",
-                    (0, 0),
-                    (-1, 0),
-                    colors.white
-                ),
-                (
                     "GRID",
                     (0, 0),
                     (-1, -1),
-                    0.35,
+                    0.3,
                     pdf_color(BORDER)
                 ),
                 (
@@ -2108,32 +2809,37 @@ def generate_pdf_report(
                     "LEFTPADDING",
                     (0, 0),
                     (-1, -1),
-                    3
+                    2
                 ),
                 (
                     "RIGHTPADDING",
                     (0, 0),
                     (-1, -1),
-                    3
+                    2
                 ),
                 (
                     "TOPPADDING",
                     (0, 0),
                     (-1, -1),
-                    4
+                    3
                 ),
                 (
                     "BOTTOMPADDING",
                     (0, 0),
                     (-1, -1),
-                    4
+                    3
                 ),
             ]
         )
     )
 
-    story.append(result_table)
-    story.append(Spacer(1, 10))
+    story.append(
+        result_table
+    )
+
+    story.append(
+        Spacer(1, 10)
+    )
 
     # --------------------------------------------------------
     # CONCLUSION
@@ -2148,12 +2854,10 @@ def generate_pdf_report(
         )
 
         conclusion_text = (
-            f"<b>{total}</b> automated authorization tests "
+            f"<b>{total}</b> automated security tests "
             f"were executed. "
-            f"<b>{passed}</b> tests passed and "
-            f"<b>{failed}</b> tests failed.<br/><br/>"
-            "All tested authorization responses matched "
-            "the configured role-permission policy."
+            f"<b>{passed}</b> passed and "
+            f"<b>{failed}</b> failed."
         )
 
         conclusion_bg = LIGHT_GREEN
@@ -2168,12 +2872,12 @@ def generate_pdf_report(
         )
 
         conclusion_text = (
-            f"<b>{total}</b> automated authorization tests "
+            f"<b>{total}</b> automated security tests "
             f"were executed. "
-            f"<b>{passed}</b> tests passed and "
-            f"<b>{failed}</b> tests failed.<br/><br/>"
-            "One or more authorization responses did not "
-            "match the configured role-permission policy."
+            f"<b>{passed}</b> passed and "
+            f"<b>{failed}</b> failed.<br/><br/>"
+            "Review the failed authorization, "
+            "authentication, JWT, or IDOR tests."
         )
 
         conclusion_bg = LIGHT_RED
@@ -2182,8 +2886,8 @@ def generate_pdf_report(
     conclusion_title_style = ParagraphStyle(
         "ConclusionTitle",
         fontName="Helvetica-Bold",
-        fontSize=10,
-        leading=13,
+        fontSize=9,
+        leading=12,
         textColor=pdf_color(
             GREEN_DARK
             if failed == 0
@@ -2206,7 +2910,7 @@ def generate_pdf_report(
                 )
             ],
         ],
-        colWidths=[184 * mm],
+        colWidths=[190 * mm],
     )
 
     conclusion.setStyle(
@@ -2229,37 +2933,25 @@ def generate_pdf_report(
                     "LEFTPADDING",
                     (0, 0),
                     (-1, -1),
-                    10
+                    9
                 ),
                 (
                     "RIGHTPADDING",
                     (0, 0),
                     (-1, -1),
-                    10
-                ),
-                (
-                    "TOPPADDING",
-                    (0, 0),
-                    (-1, 0),
-                    8
-                ),
-                (
-                    "BOTTOMPADDING",
-                    (0, 0),
-                    (-1, 0),
-                    3
-                ),
-                (
-                    "TOPPADDING",
-                    (0, 1),
-                    (-1, 1),
-                    3
-                ),
-                (
-                    "BOTTOMPADDING",
-                    (0, 1),
-                    (-1, 1),
                     9
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7
                 ),
             ]
         )
@@ -2294,18 +2986,20 @@ def generate_pdf_report(
             pdf_color(BORDER)
         )
 
-        canvas.setLineWidth(0.5)
+        canvas.setLineWidth(
+            0.5
+        )
 
         canvas.line(
-            13 * mm,
             10 * mm,
-            197 * mm,
+            10 * mm,
+            200 * mm,
             10 * mm
         )
 
         canvas.setFont(
             "Helvetica",
-            6.8
+            6.5
         )
 
         canvas.setFillColor(
@@ -2313,13 +3007,13 @@ def generate_pdf_report(
         )
 
         canvas.drawString(
-            13 * mm,
+            10 * mm,
             6 * mm,
             "Automated Access Control Test Harness"
         )
 
         canvas.drawRightString(
-            197 * mm,
+            200 * mm,
             6 * mm,
             f"Page {doc.page}"
         )
@@ -2336,8 +3030,165 @@ def generate_pdf_report(
     print("=" * 60)
     print("PDF REPORT CREATED")
     print("=" * 60)
-    print(f"Report: {PDF_REPORT}")
+
+    print(
+        f"Report: {PDF_REPORT}"
+    )
+
     print("=" * 60)
+
+
+# ============================================================
+# PRINT FINDINGS
+# ============================================================
+
+def print_findings(results):
+
+    findings = [
+        result
+        for result in results
+        if not result["passed"]
+    ]
+
+    if not findings:
+
+        print()
+        print("No failed security tests detected.")
+        return
+
+    print()
+    print("=" * 60)
+    print("SECURITY FINDINGS")
+    print("=" * 60)
+
+    for result in findings:
+
+        print()
+        print(
+            f"{result['id']} | "
+            f"{result['category']}"
+        )
+
+        print(
+            f"Role     : {result['role']}"
+        )
+
+        print(
+            f"Request  : "
+            f"{result['method']} "
+            f"{result['path']}"
+        )
+
+        print(
+            f"Expected : HTTP {result['expected']}"
+        )
+
+        print(
+            f"Actual   : HTTP {result['actual']}"
+        )
+
+        if result["error"]:
+
+            print(
+                f"Error    : {result['error']}"
+            )
+
+    print()
+    print("=" * 60)
+
+
+# ============================================================
+# LOGIN
+# ============================================================
+
+def login(identifier, password):
+
+    try:
+
+        if TARGET_NAME == "Website Target 3":
+
+            payload = {
+                "email": identifier,
+                "password": password,
+            }
+
+        else:
+
+            payload = {
+                "username": identifier,
+                "password": password,
+            }
+
+        response = requests.post(
+            f"{BASE_URL}/api/login",
+            json=payload,
+            timeout=REQUEST_TIMEOUT,
+        )
+
+        if response.status_code != 200:
+            return None
+
+        try:
+            body = response.json()
+        except ValueError:
+            return None
+
+        return body.get("token")
+
+    except requests.RequestException:
+        return None
+
+
+
+# ============================================================
+# COMMAND-LINE INTERFACE
+# ============================================================
+
+def parse_cli_args():
+    parser = argparse.ArgumentParser(
+        prog="access-control-harness",
+        description=(
+            "Automated access-control and authorization "
+            "security test harness."
+        ),
+    )
+
+    parser.add_argument(
+        "--url",
+        help="Target base URL, e.g. http://127.0.0.1:5002",
+    )
+
+    parser.add_argument(
+        "--target",
+        choices=sorted(TARGETS.keys()),
+        help="Use a configured target instead of the interactive menu.",
+    )
+
+    parser.add_argument(
+        "--role-matrix",
+        help="Path to the role-matrix YAML file.",
+    )
+
+    parser.add_argument(
+        "--openapi",
+        help="Path to an OpenAPI YAML/JSON specification.",
+    )
+
+    parser.add_argument(
+        "--report",
+        choices=("html", "pdf", "all", "none"),
+        default="all",
+        help="Report formats to generate (default: all).",
+    )
+
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=REQUEST_TIMEOUT,
+        help=f"HTTP request timeout in seconds (default: {REQUEST_TIMEOUT}).",
+    )
+
+    return parser.parse_args()
 
 
 # ============================================================
@@ -2345,16 +3196,227 @@ def generate_pdf_report(
 # ============================================================
 
 def run_tests():
+    global RESOURCE_IDS
+    global ACTIVE_USERS
+
+    global BASE_URL
+    global TARGET_NAME
+    global ROLE_MATRIX
+    global ROLE_MATRIX_TARGET3
+    global REQUEST_TIMEOUT
+    global HTML_REPORT
+    global PDF_REPORT
+
+    args = parse_cli_args()
+
+    # --------------------------------------------------------
+    # TARGET SELECTION
+    # --------------------------------------------------------
+
+    if args.url:
+        BASE_URL = args.url.rstrip("/")
+
+        # Prefer an explicitly supplied target name.
+        if args.target:
+            TARGET_NAME = TARGETS[args.target]["name"]
+
+        else:
+            TARGET_NAME = "Custom Target"
+
+    elif args.target:
+        target = TARGETS[args.target]
+
+        BASE_URL = target["url"].rstrip("/")
+        TARGET_NAME = target["name"]
+
+        print()
+        print("=" * 60)
+        print("       AUTOMATED ACCESS CONTROL TEST HARNESS")
+        print("=" * 60)
+        print()
+        print(f"Selected target : {TARGET_NAME}")
+        print(f"Target URL      : {BASE_URL}")
+        print("=" * 60)
+
+    else:
+        # Interactive target selection.
+        BASE_URL, TARGET_NAME = select_target()
+
+    # --------------------------------------------------------
+    # RUNTIME TARGET CONFIGURATION
+    # --------------------------------------------------------
+    # Resolve target-dependent configuration only after the
+    # target has been selected. This keeps module imports safe.
+
+    if TARGET_NAME == "Website Target 3":
+        ACTIVE_USERS = TARGET3_USERS
+    else:
+        ACTIVE_USERS = USERS
+
+    RESOURCE_IDS = RESOURCE_IDS_BY_TARGET.get(TARGET_NAME)
+
+    if RESOURCE_IDS is None:
+        print()
+        print(
+            f"ERROR: no resource-ID configuration for target: "
+            f"{TARGET_NAME}"
+        )
+        return
+
+    # --------------------------------------------------------
+    # RUNTIME PATHS
+    # --------------------------------------------------------
+
+    safe_name = (
+        TARGET_NAME.lower()
+        .replace(" ", "-")
+        .replace("/", "-")
+        .replace("\\", "-")
+    )
+
+    SAFE_TARGET_NAME = safe_name
+
+    REPORT_DIR = os.path.join(
+        BASE_DIR,
+        "reports"
+    )
+
+    os.makedirs(
+        REPORT_DIR,
+        exist_ok=True
+    )
+
+    HTML_REPORT = os.path.join(
+        REPORT_DIR,
+        f"{SAFE_TARGET_NAME}_access_control_report.html"
+    )
+
+    PDF_REPORT = os.path.join(
+        REPORT_DIR,
+        f"{SAFE_TARGET_NAME}_access_control_report.pdf"
+    )
+
+    if args.role_matrix:
+        role_matrix_path = os.path.abspath(args.role_matrix)
+
+        if not os.path.isfile(role_matrix_path):
+            print()
+            print(f"ERROR: role matrix not found: {role_matrix_path}")
+            return
+
+        ROLE_MATRIX = role_matrix_path
+
+        # Target 3 compatibility.
+        if TARGET_NAME == "Website Target 3":
+            ROLE_MATRIX_TARGET3 = role_matrix_path
+
+    REQUEST_TIMEOUT = args.timeout
+
+    safe_name = (
+        TARGET_NAME.lower()
+        .replace(" ", "-")
+        .replace("/", "-")
+        .replace(":", "")
+    )
+
+    HTML_REPORT = os.path.join(
+        REPORT_DIR,
+        f"{safe_name}_access_control_report.html",
+    )
+
+    PDF_REPORT = os.path.join(
+        REPORT_DIR,
+        f"{safe_name}_access_control_report.pdf",
+    )
 
     print()
     print("Loading role matrix...")
     print("=" * 60)
 
-    tests = build_tests()
+    # --------------------------------------------------------
+    # OPENAPI MODE
+    # --------------------------------------------------------
 
-    print(
-        f"Generated tests: {len(tests)}"
-    )
+    openapi_file = args.openapi
+
+    if openapi_file:
+
+        openapi_file = os.path.abspath(openapi_file)
+
+        if not os.path.isfile(openapi_file):
+            print()
+            print(f"ERROR: OpenAPI specification not found: {openapi_file}")
+            return
+
+        print()
+        print("=" * 60)
+        print("OPENAPI SECURITY TEST MODE")
+        print("=" * 60)
+        print(f"Specification : {openapi_file}")
+
+        try:
+
+            tests = load_openapi_tests(
+                openapi_file
+            )
+
+        except Exception as error:
+
+            print(
+                f"OpenAPI parsing failed: {error}"
+            )
+
+            return
+
+        print(
+            f"Generated OpenAPI tests: {len(tests)}"
+        )
+
+        print("=" * 60)
+
+        for test in tests:
+
+            print(
+                f"{test['id']:7} | "
+                f"{test['role']:5} | "
+                f"{test['category']:35} | "
+                f"{test['method']:6} | "
+                f"{test['path']}"
+            )
+
+    else:
+
+        # ----------------------------------------------------
+        # NORMAL ROLE-MATRIX MODE
+        # ----------------------------------------------------
+
+        tests = generate_all_tests()
+
+        tests = assign_test_ids(
+            tests
+        )
+
+        print(
+            f"Generated tests: {len(tests)}"
+        )
+
+        print()
+        print("Test categories:")
+        print(
+            "  • Role-based authorization"
+        )
+        print(
+            "  • Vertical authorization"
+        )
+        print(
+            "  • Horizontal authorization / IDOR"
+        )
+        print(
+            "  • Authentication"
+        )
+        print(
+            "  • Invalid JWT"
+        )
 
     # --------------------------------------------------------
     # CHECK SERVER
@@ -2374,12 +3436,21 @@ def run_tests():
 
     tokens = {}
 
-    for role, credentials in USERS.items():
+    for role, credentials in ACTIVE_USERS.items():
 
-        token = login(
-            credentials["username"],
-            credentials["password"]
-        )
+        if TARGET_NAME == "Website Target 3":
+
+            token = login(
+                credentials["email"],
+                credentials["password"]
+            )
+
+        else:
+
+            token = login(
+                credentials["username"],
+                credentials["password"]
+            )
 
         tokens[role] = token
 
@@ -2401,7 +3472,7 @@ def run_tests():
 
     print()
     print(
-        f"Running access-control tests against "
+        f"Running security tests against "
         f"{TARGET_NAME}..."
     )
 
@@ -2414,25 +3485,16 @@ def run_tests():
 
     for test in tests:
 
-        role = test["role"]
-
-        token = tokens.get(role)
-
-        expected = expected_status(
-            test["access"]
+        result = execute_test(
+            test,
+            tokens
         )
 
-        actual = request_endpoint(
-            test["method"],
-            test["path"],
-            token
-        )
+        if result.get("status") == "SKIP":
 
-        test_passed = (
-            actual == expected
-        )
+            result_text = "SKIP"
 
-        if test_passed:
+        elif result["passed"]:
 
             result_text = "PASS"
 
@@ -2445,24 +3507,17 @@ def run_tests():
             failed += 1
 
         results.append(
-            {
-                "role": role,
-                "method": test["method"],
-                "path": test["path"],
-                "access": test["access"],
-                "expected": expected,
-                "actual": actual,
-                "passed": test_passed,
-            }
+            result
         )
 
         print(
             f"{result_text:5} | "
-            f"{role:5} | "
-            f"{test['method']:6} | "
-            f"{test['path']:30} | "
-            f"expected={expected} "
-            f"actual={actual}"
+            f"{result['id']:7} | "
+            f"{result['role']:5} | "
+            f"{result['method']:6} | "
+            f"{result['path']:35} | "
+            f"expected={result['expected']} "
+            f"actual={result['actual']}"
         )
 
     # --------------------------------------------------------
@@ -2484,7 +3539,307 @@ def run_tests():
     )
 
     print(
-        f"Total:   {len(tests)}"
+        f"Total:   {len(results)}"
+    )
+
+    # --------------------------------------------------------
+    # FINDINGS
+    # --------------------------------------------------------
+
+    print_findings(
+        results
+    )
+
+    # --------------------------------------------------------
+    # TIMESTAMP
+    # --------------------------------------------------------
+
+    generated_time = datetime.now().strftime(
+        "%d %B %Y, %H:%M:%S"
+    )
+
+    # --------------------------------------------------------
+    # HTML
+    # --------------------------------------------------------
+
+    if args.report in ("html", "all"):
+
+        generate_html_report(
+            results,
+            passed,
+            failed,
+            generated_time
+        )
+
+    # --------------------------------------------------------
+    # PDF
+    # --------------------------------------------------------
+
+    if args.report in ("pdf", "all"):
+
+        generate_pdf_report(
+            results,
+            passed,
+            failed,
+            generated_time
+        )
+
+    # --------------------------------------------------------
+    # FINAL
+    # --------------------------------------------------------
+
+    print()
+    print("=" * 60)
+    print("REPORT GENERATION COMPLETE")
+    print("=" * 60)
+
+    print(
+        f"Target : {TARGET_NAME}"
+    )
+
+    print(
+        f"URL    : {BASE_URL}"
+    )
+
+    if args.report in ("html", "all"):
+        print(
+            f"HTML   : {HTML_REPORT}"
+        )
+
+    if args.report in ("pdf", "all"):
+        print(
+            f"PDF    : {PDF_REPORT}"
+        )
+
+    print("=" * 60)
+
+
+    print()
+    print("Loading role matrix...")
+    print("=" * 60)
+
+    # --------------------------------------------------------
+    # OPENAPI MODE
+    # --------------------------------------------------------
+
+    openapi_file = None
+
+    if "--openapi" in sys.argv:
+
+        index = sys.argv.index("--openapi")
+
+        if index + 1 >= len(sys.argv):
+
+            print("ERROR: --openapi requires a YAML file.")
+
+            return
+
+        openapi_file = sys.argv[index + 1]
+
+    if openapi_file:
+
+        print()
+        print("=" * 60)
+        print("OPENAPI SECURITY TEST MODE")
+        print("=" * 60)
+        print(
+            f"Specification : {openapi_file}"
+        )
+
+        try:
+
+            tests = load_openapi_tests(
+                openapi_file
+            )
+
+        except Exception as error:
+
+            print(
+                f"OpenAPI parsing failed: {error}"
+            )
+
+            return
+
+        print(
+            f"Generated OpenAPI tests: {len(tests)}"
+        )
+
+        print("=" * 60)
+
+        for test in tests:
+
+            print(
+                f"{test['id']:7} | "
+                f"{test['role']:5} | "
+                f"{test['category']:35} | "
+                f"{test['method']:6} | "
+                f"{test['path']}"
+            )
+
+    else:
+
+        # ----------------------------------------------------
+        # NORMAL ROLE-MATRIX MODE
+        # ----------------------------------------------------
+
+        tests = generate_all_tests()
+
+        tests = assign_test_ids(
+            tests
+        )
+
+        print(
+            f"Generated tests: {len(tests)}"
+        )
+
+        print()
+        print("Test categories:")
+        print(
+            "  • Role-based authorization"
+        )
+        print(
+            "  • Vertical authorization"
+        )
+        print(
+            "  • Horizontal authorization / IDOR"
+        )
+        print(
+            "  • Authentication"
+        )
+        print(
+            "  • Invalid JWT"
+        )
+
+    # --------------------------------------------------------
+    # CHECK SERVER
+    # --------------------------------------------------------
+
+    if not check_target():
+
+        return
+
+    # --------------------------------------------------------
+    # LOGIN
+    # --------------------------------------------------------
+
+    print()
+    print("Logging in test users...")
+    print("=" * 60)
+
+    tokens = {}
+
+    for role, credentials in ACTIVE_USERS.items():
+
+        if TARGET_NAME == "Website Target 3":
+
+            token = login(
+                credentials["email"],
+                credentials["password"]
+            )
+
+        else:
+
+            token = login(
+                credentials["username"],
+                credentials["password"]
+            )
+
+        tokens[role] = token
+
+        if token:
+
+            print(
+                f"{role}: login successful"
+            )
+
+        else:
+
+            print(
+                f"{role}: login failed"
+            )
+
+    # --------------------------------------------------------
+    # TESTS
+    # --------------------------------------------------------
+
+    print()
+    print(
+        f"Running security tests against "
+        f"{TARGET_NAME}..."
+    )
+
+    print("=" * 60)
+
+    passed = 0
+    failed = 0
+
+    results = []
+
+    for test in tests:
+
+        result = execute_test(
+            test,
+            tokens
+        )
+
+        if result.get("status") == "SKIP":
+
+            result_text = "SKIP"
+
+        elif result["passed"]:
+
+            result_text = "PASS"
+
+            passed += 1
+
+        else:
+
+            result_text = "FAIL"
+
+            failed += 1
+
+        results.append(
+            result
+        )
+
+        print(
+            f"{result_text:5} | "
+            f"{result['id']:7} | "
+            f"{result['role']:5} | "
+            f"{result['method']:6} | "
+            f"{result['path']:35} | "
+            f"expected={result['expected']} "
+            f"actual={result['actual']}"
+        )
+
+    # --------------------------------------------------------
+    # SUMMARY
+    # --------------------------------------------------------
+
+    print("=" * 60)
+
+    print(
+        f"Target:  {TARGET_NAME}"
+    )
+
+    print(
+        f"Passed:  {passed}"
+    )
+
+    print(
+        f"Failed:  {failed}"
+    )
+
+    print(
+        f"Total:   {len(results)}"
+    )
+
+    # --------------------------------------------------------
+    # FINDINGS
+    # --------------------------------------------------------
+
+    print_findings(
+        results
     )
 
     # --------------------------------------------------------

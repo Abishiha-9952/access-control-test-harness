@@ -7,3 +7,5 @@ harness/reports/
 *.html
 
 .env
+
+target3-app/instance/*.db
