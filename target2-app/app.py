@@ -561,9 +561,11 @@ def api_delete_user(user_id):
 @app.route("/api/admin/stats", methods=["GET"])
 @token_required
 def api_admin_stats():
-    # INTENTIONALLY VULNERABLE TARGET:
-    # Authentication is checked, but the user's role is NOT checked.
-    # Therefore a normal authenticated USER can access admin statistics.
+
+    if str(request.user.get("role", "")).upper() != "ADMIN":
+        return jsonify({
+            "error": "Admin access required"
+        }), 403
 
     return jsonify({
         "total_users": 2,

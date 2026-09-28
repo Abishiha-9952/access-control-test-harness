@@ -61,7 +61,7 @@ def select_target():
     while True:
 
         choice = input(
-            "Select target [1/2/4]: "
+            "Select target [1/2/3/4]: "
         ).strip()
 
         if choice in TARGETS:
@@ -86,7 +86,7 @@ def select_target():
 
         print()
         print("Invalid choice.")
-        print("Please enter 1, 2, or 4.")
+        print("Please enter 1, 2, 3, or 4.")
         print()
 
 # ============================================================
@@ -3630,6 +3630,283 @@ def run_tests():
         print(
             f"PDF    : {PDF_REPORT}"
         )
+
+    print("=" * 60)
+
+
+    print()
+    print("Loading role matrix...")
+    print("=" * 60)
+
+    # --------------------------------------------------------
+    # OPENAPI MODE
+    # --------------------------------------------------------
+
+    openapi_file = None
+
+    if "--openapi" in sys.argv:
+
+        index = sys.argv.index("--openapi")
+
+        if index + 1 >= len(sys.argv):
+
+            print("ERROR: --openapi requires a YAML file.")
+
+            return
+
+        openapi_file = sys.argv[index + 1]
+
+    if openapi_file:
+
+        print()
+        print("=" * 60)
+        print("OPENAPI SECURITY TEST MODE")
+        print("=" * 60)
+        print(
+            f"Specification : {openapi_file}"
+        )
+
+        try:
+
+            tests = load_openapi_tests(
+                openapi_file
+            )
+
+        except Exception as error:
+
+            print(
+                f"OpenAPI parsing failed: {error}"
+            )
+
+            return
+
+        print(
+            f"Generated OpenAPI tests: {len(tests)}"
+        )
+
+        print("=" * 60)
+
+        for test in tests:
+
+            print(
+                f"{test['id']:7} | "
+                f"{test['role']:5} | "
+                f"{test['category']:35} | "
+                f"{test['method']:6} | "
+                f"{test['path']}"
+            )
+
+    else:
+
+        # ----------------------------------------------------
+        # NORMAL ROLE-MATRIX MODE
+        # ----------------------------------------------------
+
+        tests = generate_all_tests()
+
+        tests = assign_test_ids(
+            tests
+        )
+
+        print(
+            f"Generated tests: {len(tests)}"
+        )
+
+        print()
+        print("Test categories:")
+        print(
+            "  • Role-based authorization"
+        )
+        print(
+            "  • Vertical authorization"
+        )
+        print(
+            "  • Horizontal authorization / IDOR"
+        )
+        print(
+            "  • Authentication"
+        )
+        print(
+            "  • Invalid JWT"
+        )
+
+    # --------------------------------------------------------
+    # CHECK SERVER
+    # --------------------------------------------------------
+
+    if not check_target():
+
+        return
+
+    # --------------------------------------------------------
+    # LOGIN
+    # --------------------------------------------------------
+
+    print()
+    print("Logging in test users...")
+    print("=" * 60)
+
+    tokens = {}
+
+    for role, credentials in ACTIVE_USERS.items():
+
+        token = login(
+            credentials["username"],
+            credentials["password"]
+        )
+
+        tokens[role] = token
+
+        if token:
+
+            print(
+                f"{role}: login successful"
+            )
+
+        else:
+
+            print(
+                f"{role}: login failed"
+            )
+
+    # --------------------------------------------------------
+    # TESTS
+    # --------------------------------------------------------
+
+    print()
+    print(
+        f"Running security tests against "
+        f"{TARGET_NAME}..."
+    )
+
+    print("=" * 60)
+
+    passed = 0
+    failed = 0
+
+    results = []
+
+    for test in tests:
+
+        result = execute_test(
+            test,
+            tokens
+        )
+
+        if result.get("status") == "SKIP":
+
+            result_text = "SKIP"
+
+        elif result["passed"]:
+
+            result_text = "PASS"
+
+            passed += 1
+
+        else:
+
+            result_text = "FAIL"
+
+            failed += 1
+
+        results.append(
+            result
+        )
+
+        print(
+            f"{result_text:5} | "
+            f"{result['id']:7} | "
+            f"{result['role']:5} | "
+            f"{result['method']:6} | "
+            f"{result['path']:35} | "
+            f"expected={result['expected']} "
+            f"actual={result['actual']}"
+        )
+
+    # --------------------------------------------------------
+    # SUMMARY
+    # --------------------------------------------------------
+
+    print("=" * 60)
+
+    print(
+        f"Target:  {TARGET_NAME}"
+    )
+
+    print(
+        f"Passed:  {passed}"
+    )
+
+    print(
+        f"Failed:  {failed}"
+    )
+
+    print(
+        f"Total:   {len(results)}"
+    )
+
+    # --------------------------------------------------------
+    # FINDINGS
+    # --------------------------------------------------------
+
+    print_findings(
+        results
+    )
+
+    # --------------------------------------------------------
+    # TIMESTAMP
+    # --------------------------------------------------------
+
+    generated_time = datetime.now().strftime(
+        "%d %B %Y, %H:%M:%S"
+    )
+
+    # --------------------------------------------------------
+    # HTML
+    # --------------------------------------------------------
+
+    generate_html_report(
+        results,
+        passed,
+        failed,
+        generated_time
+    )
+
+    # --------------------------------------------------------
+    # PDF
+    # --------------------------------------------------------
+
+    generate_pdf_report(
+        results,
+        passed,
+        failed,
+        generated_time
+    )
+
+    # --------------------------------------------------------
+    # FINAL
+    # --------------------------------------------------------
+
+    print()
+    print("=" * 60)
+    print("REPORT GENERATION COMPLETE")
+    print("=" * 60)
+
+    print(
+        f"Target : {TARGET_NAME}"
+    )
+
+    print(
+        f"URL    : {BASE_URL}"
+    )
+
+    print(
+        f"HTML   : {HTML_REPORT}"
+    )
+
+    print(
+        f"PDF    : {PDF_REPORT}"
+    )
 
     print("=" * 60)
 

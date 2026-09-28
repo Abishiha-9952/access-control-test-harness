@@ -61,7 +61,7 @@ def select_target():
     while True:
 
         choice = input(
-            "Select target [1/2/4]: "
+            "Select target [1/2/3/4]: "
         ).strip()
 
         if choice in TARGETS:
@@ -86,7 +86,7 @@ def select_target():
 
         print()
         print("Invalid choice.")
-        print("Please enter 1, 2, or 4.")
+        print("Please enter 1, 2, 3, or 4.")
         print()
 
 # ============================================================
@@ -409,39 +409,6 @@ def request_data(
     return None
 
 # ============================================================
-# RESOURCE STATE VALIDATION
-# ============================================================
-
-def get_resource_state(path, token):
-    try:
-        state_path = path
-
-        # Admin DELETE endpoint does not support GET.
-        # Resolve it to the corresponding user resource
-        # so we can verify that a forbidden DELETE did not
-        # actually change the resource.
-        if state_path.startswith("/api/admin/users/"):
-            user_id = state_path.rsplit("/", 1)[-1]
-            state_path = f"/api/users/{user_id}"
-
-        response = requests.get(
-            f"{BASE_URL}{state_path}",
-            headers={
-                "Authorization": f"Bearer {token}"
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-
-        try:
-            return response.json()
-        except ValueError:
-            return response.text
-
-    except requests.RequestException:
-        return None
-
-
-# ============================================================
 # REQUEST ENDPOINT
 # ============================================================
 
@@ -483,14 +450,8 @@ def request_endpoint(
             timeout=REQUEST_TIMEOUT,
         )
 
-        try:
-            response_body = response.json()
-        except ValueError:
-            response_body = response.text
-
         return {
             "status": response.status_code,
-            "body": response_body,
             "error": None,
         }
 
@@ -702,11 +663,6 @@ def build_security_tests():
                 "category": category,
                 "authentication": False,
                 "invalid_token": False,
-                "validation": (
-                    "admin_stats_protection"
-                    if path == "/api/admin/stats"
-                    else None
-                ),
             }
         )
 
@@ -756,7 +712,6 @@ def build_security_tests():
                 "authentication": True,
                 "invalid_token": False,
                 "idor": True,
-                "validation": "forbidden_read",
             },
 
             {
@@ -771,7 +726,6 @@ def build_security_tests():
                 "authentication": True,
                 "invalid_token": False,
                 "idor": True,
-                "validation": "forbidden_modify",
             },
 
             {
@@ -786,7 +740,6 @@ def build_security_tests():
                 "authentication": True,
                 "invalid_token": False,
                 "idor": True,
-                "validation": "forbidden_read",
             },
         ]
     )
@@ -909,36 +862,6 @@ def execute_test(
         test
     )
 
-    # --------------------------------------------------------
-    # RESOURCE STATE BEFORE REQUEST
-    # --------------------------------------------------------
-
-    state_before = None
-    state_after = None
-
-    modifying_methods = {
-        "POST",
-        "PUT",
-        "PATCH",
-        "DELETE",
-    }
-
-    is_modifying_request = (
-        test["method"].upper()
-        in modifying_methods
-    )
-
-    if is_modifying_request:
-
-        admin_token = tokens.get("admin")
-
-        if admin_token:
-
-            state_before = get_resource_state(
-                request_path,
-                admin_token
-            )
-
     response = request_endpoint(
         test["method"],
         request_path,
@@ -948,136 +871,10 @@ def execute_test(
     )
 
     actual = response["status"]
-    body = response.get("body")
-    validation = test.get("validation")
-    validation_error = None
-
-    # --------------------------------------------------------
-    # RESPONSE CONTENT VALIDATION
-    # --------------------------------------------------------
-
-    if actual == expected and validation == "admin_stats_protection":
-
-        body_text = str(body)
-
-        leaked_fields = [
-            "total_users",
-            "total_orders",
-            "total_products",
-        ]
-
-        leaked = [
-            field
-            for field in leaked_fields
-            if field in body_text
-        ]
-
-        if leaked:
-            validation_error = (
-                "Admin statistics data exposed in "
-                f"forbidden response: {', '.join(leaked)}"
-            )
-
-    # --------------------------------------------------------
-    # FORBIDDEN READ VALIDATION
-    # --------------------------------------------------------
-
-    elif actual == expected and validation == "forbidden_read":
-
-        body_text = str(body)
-
-        if actual == 403:
-            sensitive_fields = [
-                "username",
-                "email",
-                "total_users",
-                "total_orders",
-                "total_products",
-            ]
-
-            leaked = [
-                field
-                for field in sensitive_fields
-                if field in body_text
-            ]
-
-            if leaked:
-                validation_error = (
-                    "Forbidden resource data exposed: "
-                    f"{', '.join(leaked)}"
-                )
-
-    # --------------------------------------------------------
-    # RESOURCE STATE AFTER REQUEST
-    # --------------------------------------------------------
-
-    if is_modifying_request:
-
-        admin_token = tokens.get("admin")
-
-        if admin_token:
-
-            state_after = get_resource_state(
-                request_path,
-                admin_token
-            )
-
-    # --------------------------------------------------------
-    # FORBIDDEN MODIFY VALIDATION
-    # --------------------------------------------------------
-
-    if validation == "forbidden_modify":
-
-        if actual != 403:
-
-            validation_error = (
-                "Forbidden modification returned unexpected "
-                f"HTTP status {actual}; expected 403"
-            )
-
-        elif admin_token is None:
-
-            validation_error = (
-                "Unable to validate resource state: "
-                "admin authentication token unavailable"
-            )
-
-        elif state_before != state_after:
-
-            validation_error = (
-                "Forbidden modification changed "
-                "the protected resource"
-            )
 
     passed = (
         actual == expected
-        and validation_error is None
     )
-
-    final_error = (
-        validation_error
-        if validation_error
-        else response["error"]
-    )
-
-    # --------------------------------------------------------
-    # SHOW RESOURCE STATE VALIDATION
-    # --------------------------------------------------------
-
-    if is_modifying_request:
-
-        print(
-            f"STATE CHECK | {test.get('id', '')} | "
-            f"before={state_before} | "
-            f"after={state_after}"
-        )
-
-    else:
-
-        print(
-            f"STATE CHECK | {test.get('id', '')} | "
-            "read-only request; no state mutation expected"
-        )
 
     return {
         "id": test.get(
@@ -1095,9 +892,7 @@ def execute_test(
         "expected": expected,
         "actual": actual,
         "passed": passed,
-        "error": final_error,
-        "state_before": state_before,
-        "state_after": state_after,
+        "error": response["error"],
         "idor": test.get(
             "idor",
             False
@@ -1314,13 +1109,6 @@ def generate_html_report(
 
             <td>
                 {escape(error_text)}
-            </td>
-
-            <td>
-                {escape(
-                    "BEFORE: " + str(result.get("state_before"))
-                    + " | AFTER: " + str(result.get("state_after"))
-                ) if result.get("state_before") is not None else ""}
             </td>
 
         </tr>
@@ -1866,7 +1654,6 @@ DETAILED TEST RESULTS
 <th>ACTUAL</th>
 <th>RESULT</th>
 <th>ERROR</th>
-            <th>STATE CHECK</th>
 
 </tr>
 
@@ -2714,25 +2501,10 @@ def generate_pdf_report(
             Paragraph("EXP.", table_header_style),
             Paragraph("ACT.", table_header_style),
             Paragraph("RESULT", table_header_style),
-            Paragraph("ERROR", table_header_style),
-            Paragraph("STATE CHECK", table_header_style),
         ]
     ]
 
     for result in results:
-
-        error_text = result.get("error") or ""
-
-        state_before = result.get("state_before")
-        state_after = result.get("state_after")
-
-        if state_before is not None and state_after is not None:
-            if state_before == state_after:
-                state_check = "UNCHANGED"
-            else:
-                state_check = "CHANGED"
-        else:
-            state_check = ""
 
         table_data.append(
             [
@@ -2776,32 +2548,21 @@ def generate_pdf_report(
                 result_badge(
                     result["passed"]
                 ),
-
-                Paragraph(
-                    escape(error_text),
-                    table_text_style
-                ),
-
-                Paragraph(
-                    escape(state_check),
-                    table_text_style
-                ),
             ]
         )
 
     result_table = Table(
         table_data,
         colWidths=[
-            12 * mm,
-            17 * mm,
-            28 * mm,
             14 * mm,
-            37 * mm,
+            19 * mm,
+            32 * mm,
             17 * mm,
-            9 * mm,
-            9 * mm,
-            18 * mm,
-            29 * mm,
+            43 * mm,
+            19 * mm,
+            11 * mm,
+            11 * mm,
+            22 * mm,
         ],
         repeatRows=1,
         hAlign="CENTER",
@@ -3630,6 +3391,283 @@ def run_tests():
         print(
             f"PDF    : {PDF_REPORT}"
         )
+
+    print("=" * 60)
+
+
+    print()
+    print("Loading role matrix...")
+    print("=" * 60)
+
+    # --------------------------------------------------------
+    # OPENAPI MODE
+    # --------------------------------------------------------
+
+    openapi_file = None
+
+    if "--openapi" in sys.argv:
+
+        index = sys.argv.index("--openapi")
+
+        if index + 1 >= len(sys.argv):
+
+            print("ERROR: --openapi requires a YAML file.")
+
+            return
+
+        openapi_file = sys.argv[index + 1]
+
+    if openapi_file:
+
+        print()
+        print("=" * 60)
+        print("OPENAPI SECURITY TEST MODE")
+        print("=" * 60)
+        print(
+            f"Specification : {openapi_file}"
+        )
+
+        try:
+
+            tests = load_openapi_tests(
+                openapi_file
+            )
+
+        except Exception as error:
+
+            print(
+                f"OpenAPI parsing failed: {error}"
+            )
+
+            return
+
+        print(
+            f"Generated OpenAPI tests: {len(tests)}"
+        )
+
+        print("=" * 60)
+
+        for test in tests:
+
+            print(
+                f"{test['id']:7} | "
+                f"{test['role']:5} | "
+                f"{test['category']:35} | "
+                f"{test['method']:6} | "
+                f"{test['path']}"
+            )
+
+    else:
+
+        # ----------------------------------------------------
+        # NORMAL ROLE-MATRIX MODE
+        # ----------------------------------------------------
+
+        tests = generate_all_tests()
+
+        tests = assign_test_ids(
+            tests
+        )
+
+        print(
+            f"Generated tests: {len(tests)}"
+        )
+
+        print()
+        print("Test categories:")
+        print(
+            "  • Role-based authorization"
+        )
+        print(
+            "  • Vertical authorization"
+        )
+        print(
+            "  • Horizontal authorization / IDOR"
+        )
+        print(
+            "  • Authentication"
+        )
+        print(
+            "  • Invalid JWT"
+        )
+
+    # --------------------------------------------------------
+    # CHECK SERVER
+    # --------------------------------------------------------
+
+    if not check_target():
+
+        return
+
+    # --------------------------------------------------------
+    # LOGIN
+    # --------------------------------------------------------
+
+    print()
+    print("Logging in test users...")
+    print("=" * 60)
+
+    tokens = {}
+
+    for role, credentials in ACTIVE_USERS.items():
+
+        token = login(
+            credentials["username"],
+            credentials["password"]
+        )
+
+        tokens[role] = token
+
+        if token:
+
+            print(
+                f"{role}: login successful"
+            )
+
+        else:
+
+            print(
+                f"{role}: login failed"
+            )
+
+    # --------------------------------------------------------
+    # TESTS
+    # --------------------------------------------------------
+
+    print()
+    print(
+        f"Running security tests against "
+        f"{TARGET_NAME}..."
+    )
+
+    print("=" * 60)
+
+    passed = 0
+    failed = 0
+
+    results = []
+
+    for test in tests:
+
+        result = execute_test(
+            test,
+            tokens
+        )
+
+        if result.get("status") == "SKIP":
+
+            result_text = "SKIP"
+
+        elif result["passed"]:
+
+            result_text = "PASS"
+
+            passed += 1
+
+        else:
+
+            result_text = "FAIL"
+
+            failed += 1
+
+        results.append(
+            result
+        )
+
+        print(
+            f"{result_text:5} | "
+            f"{result['id']:7} | "
+            f"{result['role']:5} | "
+            f"{result['method']:6} | "
+            f"{result['path']:35} | "
+            f"expected={result['expected']} "
+            f"actual={result['actual']}"
+        )
+
+    # --------------------------------------------------------
+    # SUMMARY
+    # --------------------------------------------------------
+
+    print("=" * 60)
+
+    print(
+        f"Target:  {TARGET_NAME}"
+    )
+
+    print(
+        f"Passed:  {passed}"
+    )
+
+    print(
+        f"Failed:  {failed}"
+    )
+
+    print(
+        f"Total:   {len(results)}"
+    )
+
+    # --------------------------------------------------------
+    # FINDINGS
+    # --------------------------------------------------------
+
+    print_findings(
+        results
+    )
+
+    # --------------------------------------------------------
+    # TIMESTAMP
+    # --------------------------------------------------------
+
+    generated_time = datetime.now().strftime(
+        "%d %B %Y, %H:%M:%S"
+    )
+
+    # --------------------------------------------------------
+    # HTML
+    # --------------------------------------------------------
+
+    generate_html_report(
+        results,
+        passed,
+        failed,
+        generated_time
+    )
+
+    # --------------------------------------------------------
+    # PDF
+    # --------------------------------------------------------
+
+    generate_pdf_report(
+        results,
+        passed,
+        failed,
+        generated_time
+    )
+
+    # --------------------------------------------------------
+    # FINAL
+    # --------------------------------------------------------
+
+    print()
+    print("=" * 60)
+    print("REPORT GENERATION COMPLETE")
+    print("=" * 60)
+
+    print(
+        f"Target : {TARGET_NAME}"
+    )
+
+    print(
+        f"URL    : {BASE_URL}"
+    )
+
+    print(
+        f"HTML   : {HTML_REPORT}"
+    )
+
+    print(
+        f"PDF    : {PDF_REPORT}"
+    )
 
     print("=" * 60)
 
