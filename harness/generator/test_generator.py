@@ -28,11 +28,12 @@ def generate_tests(endpoints, policy):
 
     for rule in policy:
         tests.append({
-            "role": rule["role"],
-            "method": rule["method"],
-            "path": rule["path"],
-            "expected_access": rule["expected_access"],
-        })
+    "test_type": "access_control",
+    "role": rule["role"],
+    "method": rule["method"],
+    "path": rule["path"],
+    "expected_access": rule["expected_access"],
+})
 
     return tests
 
