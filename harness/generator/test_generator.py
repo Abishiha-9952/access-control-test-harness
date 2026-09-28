@@ -5,6 +5,26 @@ def generate_tests(endpoints, policy):
     """
 
     tests = []
+   
+    tests.append({
+    "test_type": "authentication",
+    "description": "Verify that unauthenticated users cannot access protected endpoints."
+})
+
+    tests.append({
+    "test_type": "vertical_authorization",
+    "description": "Verify that lower-privileged roles cannot access higher-privileged resources."
+})
+
+    tests.append({
+    "test_type": "horizontal_authorization",
+    "description": "Verify that one user cannot access another user's resources."
+})
+
+    tests.append({
+    "test_type": "jwt_validation",
+    "description": "Verify that JWT tokens are properly validated before granting access."
+})
 
     for rule in policy:
         tests.append({
