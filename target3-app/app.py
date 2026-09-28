@@ -323,9 +323,19 @@ def get_users():
 @jwt_required
 def get_user(user_id):
 
-    # INTENTIONALLY VULNERABLE:
-    # No ownership check is performed.
-    # Any authenticated user can request any user ID.
+    # Authorization control:
+    # Normal users may access only their own user record.
+    # Administrators may access any user record.
+
+    current_user = request.current_user
+
+    if (
+        current_user.role != "admin"
+        and current_user.id != user_id
+    ):
+        return jsonify({
+            "error": "Access denied"
+        }), 403
 
     user = db.session.get(
         User,
@@ -763,8 +773,10 @@ def logout():
 
 if __name__ == "__main__":
 
+    import os
+
     app.run(
         host="127.0.0.1",
-        port=5002,
-        debug=True
+        port=int(os.getenv("PORT", "5004")),
+        debug=False
     )

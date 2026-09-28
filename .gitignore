@@ -9,3 +9,8 @@ harness/reports/
 .env
 
 target3-app/instance/*.db
+
+__pycache__/
+*.pyc
+
+lab/target3-vulnerable/instance/*.db
