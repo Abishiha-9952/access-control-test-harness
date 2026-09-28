@@ -2,7 +2,9 @@
 
 A Python-based security testing tool for testing **authentication and authorization controls** in web applications and APIs.
 
-The harness is designed to identify access-control vulnerabilities by testing different users and roles against protected endpoints and verifying not only HTTP responses, but also returned data and unauthorized state changes.
+The Access-Control Test Harness is designed to identify access-control vulnerabilities by testing different users and roles against protected endpoints. It validates not only HTTP responses, but also returned data and unauthorized changes to application state.
+
+The project includes controlled target applications that can be used to reproduce and validate access-control vulnerabilities in a local testing environment.
 
 ---
 
@@ -12,42 +14,40 @@ Access control determines **who is allowed to access a resource or perform an op
 
 Incorrect access-control implementation can allow:
 
-* Unauthenticated users to access protected resources
-* Normal users to access administrator functions
-* One user to access another user's data
-* Unauthorized users to modify or delete resources
-* Sensitive information to be returned to users without permission
+- Unauthenticated users to access protected resources
+- Normal users to access administrator functions
+- One user to access another user's data
+- Unauthorized users to modify another user's resources
+- Sensitive information to be returned to users without permission
 
-The **Access-Control Test Harness** automates these checks and provides test results that can be used to identify authorization problems.
-
-The project also provides controlled target applications for reproducing and validating access-control vulnerabilities.
+The **Access-Control Test Harness** automates authorization testing and provides evidence that can be used to identify and validate access-control issues.
 
 ---
 
 ## 2. Project Objectives
 
-The main objectives are:
+The main objectives of this project are:
 
-* Test authentication and authorization controls.
-* Test access based on user roles.
-* Detect vertical privilege escalation.
-* Detect horizontal privilege escalation.
-* Test unauthenticated access to protected endpoints.
-* Validate returned response data.
-* Verify whether unauthorized modifications actually occur.
-* Compare vulnerable and fixed application behavior.
-* Generate security-testing reports.
-* Provide reproducible evidence of access-control testing.
+- Test authentication and authorization controls
+- Test access based on user roles
+- Detect vertical privilege escalation
+- Detect horizontal privilege escalation
+- Test unauthenticated access to protected endpoints
+- Validate returned response data
+- Verify whether unauthorized modifications actually occur
+- Compare vulnerable and fixed application behavior
+- Generate security-testing reports
+- Provide reproducible evidence of authorization testing
 
 ---
 
 # 3. What Does the Harness Test?
 
-The harness focuses on authorization boundaries.
+The harness focuses on testing authorization boundaries between users, roles, and resources.
 
 ## 3.1 Unauthenticated Access
 
-The harness tests whether a user without authentication can access protected endpoints.
+The harness tests whether an unauthenticated user can access protected endpoints.
 
 Example:
 
@@ -59,19 +59,15 @@ Protected Endpoint
         |
         v
 Access should be denied
-```
 
-If protected information is returned without authentication, the test can identify an authorization issue.
+If protected information is returned without authentication, the test can identify a potential authorization issue.
 
----
-
-## 3.2 Normal User Accessing Admin Functions
+3.2 Normal User Accessing Admin Functions
 
 The harness tests whether an ordinary user can access administrator-only functionality.
 
 Example:
 
-```text
 Normal User
      |
      v
@@ -79,19 +75,15 @@ Admin Endpoint
      |
      v
 Access should be denied
-```
 
-This helps identify **vertical privilege escalation**.
+This helps identify vertical privilege escalation.
 
----
-
-## 3.3 Cross-User Resource Access
+3.3 Cross-User Resource Access
 
 The harness tests whether one authenticated user can access another user's resources.
 
 Example:
 
-```text
 User A
   |
   | Request User B's resource
@@ -100,19 +92,15 @@ Protected Resource
   |
   v
 Access should be denied
-```
 
-This helps identify **horizontal privilege escalation and IDOR-style authorization issues**.
+This helps identify horizontal privilege escalation and IDOR-style authorization issues.
 
----
+3.4 Unauthorized Modifications
 
-## 3.4 Unauthorized Modifications
+The harness can also verify whether an unauthorized request actually changes application data.
 
-The harness also verifies whether an unauthorized request actually changes application data.
+Example:
 
-For example:
-
-```text
 User A
    |
    | Modify User B's resource
@@ -128,17 +116,13 @@ Authorization Check
            |
            v
     Potential vulnerability
-```
 
-This is important because checking only the HTTP status code does not always prove that an unauthorized operation was prevented.
+This is important because an HTTP status code alone does not always prove that an unauthorized operation was prevented.
 
----
+4. Main Testing Approach
 
-# 4. Main Testing Approach
+The general testing workflow is:
 
-The testing process is:
-
-```text
 1. Start target application
           |
           v
@@ -166,14 +150,8 @@ The testing process is:
 9. Compare expected vs actual behavior
           |
           v
-10. Generate report
-```
-
----
-
-# 5. Project Structure
-
-```text
+10. Generate security report
+5. Project Structure
 access-control-test-harness/
 │
 ├── harness/
@@ -196,13 +174,8 @@ access-control-test-harness/
 ├── role_matrix_target2.yaml
 ├── README.md
 └── .gitignore
-```
-
----
-
-# 6. Important Files
-
-## `harness/test_runner.py`
+6. Important Files
+harness/test_runner.py
 
 This is the main test execution component.
 
@@ -210,310 +183,216 @@ It performs the configured access-control tests against the target application.
 
 The tests can validate:
 
-* Authentication requirements
-* User roles
-* Endpoint authorization
-* HTTP responses
-* Response content
-* Protected data
-* Unauthorized state changes
-
----
-
-## `harness/openapi_parser.py`
+Authentication requirements
+User roles
+Endpoint authorization
+HTTP responses
+Response content
+Protected data
+Unauthorized state changes
+harness/openapi_parser.py
 
 This component works with OpenAPI/API definitions used by the testing process.
 
-It helps identify API information such as:
+It handles API information such as:
 
-* Endpoints
-* HTTP methods
-* API paths
-* Request information
+Endpoints
+HTTP methods
+API paths
+Request information
+harness/openapi_test_generator.py
 
----
+This component prepares access-control test cases using the API information and configured authorization requirements.
 
-## `harness/openapi_test_generator.py`
-
-This component prepares access-control test cases based on the API information and configured authorization requirements.
-
----
-
-## `harness/__main__.py`
+harness/__main__.py
 
 Provides the module entry point for running the harness where supported.
 
----
+7. OpenAPI Files
 
-# 7. OpenAPI Files
+The project contains OpenAPI specifications used during testing:
 
-The project contains OpenAPI specifications used during testing.
-
-```text
 openapi.yaml
 openapi_test.yaml
-```
 
-These files describe API endpoints and information required for the testing process.
+These files describe API endpoints and information required by the testing process.
 
----
+8. Role Matrices
 
-# 8. Role Matrices
+The project uses role-matrix files to define expected authorization behavior:
 
-The project uses role-matrix files to define expected authorization behavior.
-
-```text
 role_matrix.yaml
 role_matrix_target1.yaml
 role_matrix_target2.yaml
-```
 
 A role matrix describes which operations different users or roles should be allowed or denied.
 
 Example:
 
-| User Type       | Normal Resource     | Own Resource | Admin Resource |
-| --------------- | ------------------- | ------------ | -------------- |
-| Unauthenticated | Deny                | Deny         | Deny           |
-| Normal User     | According to policy | Allow        | Deny           |
-| Admin           | According to policy | Allow        | Allow          |
+User Type	Normal Resource	Own Resource	Admin Resource
+Unauthenticated	Deny	Deny	Deny
+Normal User	According to policy	Allow	Deny
+Admin	According to policy	Allow	Allow
 
-The exact permissions depend on the target application's security requirements.
+The exact permissions depend on the security requirements of the target application.
 
----
+9. Target Applications
 
-# 9. Target Applications
+The repository contains controlled applications used as security-testing targets.
 
-The repository contains controlled applications that are used as security-testing targets.
-
-## Target 1
-
-```text
+Target 1
 target1-app/
-```
 
 Target 1 provides an environment for testing access-control behavior.
 
----
-
-## Target 2
-
-```text
+Target 2
 target2-app/
-```
 
 Target 2 provides another controlled environment for testing authorization behavior.
 
 It contains application templates under:
 
-```text
 target2-app/templates/
-```
 
 The target applications are intended for local and controlled security testing.
 
----
-
-# 10. Installation
-
-## Step 1 — Clone the Repository
-
-```bash
+10. Installation
+Step 1 — Clone the Repository
 git clone https://github.com/Abishiha-9952/access-control-test-harness.git
-```
 
 Enter the project directory:
 
-```bash
 cd access-control-test-harness
-```
-
----
-
-## Step 2 — Create a Virtual Environment
+Step 2 — Create a Virtual Environment
 
 On Linux/Kali:
 
-```bash
 python3 -m venv venv
-```
 
 Activate it:
 
-```bash
 source venv/bin/activate
-```
 
 On Windows:
 
-```powershell
 python -m venv venv
 venv\Scripts\activate
-```
+Step 3 — Install Dependencies
 
----
+Install the Python dependencies required by the project and target application.
 
-## Step 3 — Install Dependencies
+If a target application contains a requirements.txt file, install its dependencies from that target directory:
 
-Install the required Python packages:
-
-```bash
 pip install -r requirements.txt
-```
 
-If a target application has its own requirements file, install those dependencies from the corresponding target application directory.
+If dependencies are already installed in your environment, this step can be skipped.
 
----
-
-# 11. Configure the Target
+11. Configure the Target
 
 Before running the harness, make sure the target application is running.
 
 The testing configuration may include:
 
-```text
 Target URL
 User credentials
 User roles
 API endpoints
 Authorization policy
 Role matrix
-```
 
 Sensitive credentials should not be committed to GitHub.
 
-Use environment variables or local configuration for passwords, tokens, API keys, and other secrets.
+Use environment variables or local configuration for:
 
----
+Passwords
+Authentication tokens
+API keys
+Other secrets
+12. Start a Target Application
 
-# 12. Start a Target Application
-
-Navigate to the target application.
+Navigate to the required target application.
 
 For example:
 
-```bash
 cd target2-app
-```
 
-Install its requirements if required:
+If the target application contains its own dependency file, install the required dependencies:
 
-```bash
 pip install -r requirements.txt
-```
 
-Start the application using its configured startup command.
+For a Flask application, the application may be started using:
 
-For a Flask application, this may be:
-
-```bash
 python app.py
-```
 
 The exact host and port depend on the application's configuration.
 
-After starting the application, verify that it is accessible before running the security tests.
+Verify that the target application is accessible before running the security tests.
 
----
-
-# 13. Run the Test Harness
+13. Run the Test Harness
 
 From the project root:
 
-```bash
 python harness/test_runner.py
-```
 
-If the project supports module execution:
+If module execution is supported by the current project configuration, the harness can also be run using:
 
-```bash
 python -m harness
-```
 
-The exact command-line options depend on the current test-runner configuration.
+The available command-line options depend on the current test-runner implementation.
 
----
-
-# 14. Authorization Test Cases
+14. Authorization Test Cases
 
 The harness can be used to test several authorization scenarios.
 
-### Test 1 — Unauthenticated User
-
-```text
+Test 1 — Unauthenticated User
 User: Unauthenticated
 Endpoint: Protected endpoint
 Expected: Access denied
-```
-
----
-
-### Test 2 — Normal User → Admin Endpoint
-
-```text
+Test 2 — Normal User → Admin Endpoint
 User: Normal User
 Endpoint: Admin endpoint
 Expected: Access denied
-```
-
----
-
-### Test 3 — User A → User B
-
-```text
+Test 3 — User A → User B
 User: User A
 Resource owner: User B
 Expected: Access denied
-```
-
----
-
-### Test 4 — Unauthorized Modification
-
-```text
+Test 4 — Unauthorized Modification
 User: User A
 Target resource: User B
 Operation: Modify
+
 Expected:
 - Request denied
 - Resource remains unchanged
-```
-
----
-
-# 15. HTTP Response Validation
+15. HTTP Response Validation
 
 The harness checks HTTP responses as part of authorization testing.
 
 Possible responses include:
 
-```text
 200 OK
 201 Created
 401 Unauthorized
 403 Forbidden
 404 Not Found
-```
 
-However, an HTTP status code alone is not considered sufficient evidence of correct authorization.
+However, an HTTP status code alone is not sufficient evidence of correct authorization.
 
 For example:
 
-```text
 403 Forbidden
-```
 
-is useful evidence, but the test should also consider whether protected data was exposed or whether an unauthorized state change occurred.
+is useful evidence, but testing should also consider:
 
----
-
-# 16. Response Data Validation
+Whether protected data was exposed
+Whether the requested operation actually occurred
+Whether application state changed
+16. Response Data Validation
 
 The harness can verify the actual content returned by the application.
 
 Example:
 
-```text
 User A requests User B's private resource.
 
 Expected:
@@ -523,20 +402,16 @@ Observed:
 User B's private information is returned.
 
 Result:
-Authorization vulnerability identified.
-```
+Potential authorization vulnerability identified.
 
-This helps detect cases where the response status does not fully describe the security impact.
+This helps identify cases where the response status does not fully describe the security impact.
 
----
-
-# 17. State Validation
+17. State Validation
 
 For operations that modify application data, the harness can validate application state.
 
 Example:
 
-```text
 Before request:
 User B's resource = Original value
 
@@ -544,36 +419,24 @@ User A sends unauthorized modification
 
 After request:
 User B's resource = ?
-```
 
 Expected secure result:
 
-```text
 Authorization denied
 +
 Resource remains unchanged
-```
 
-If the resource changes despite the authorization restriction, the test identifies a potential access-control vulnerability.
+If the resource changes despite the authorization restriction, the test can identify a potential access-control vulnerability.
 
----
+18. Vulnerable and Fixed Testing
 
-# 18. Vulnerable and Fixed Testing
-
-A major purpose of the project is to demonstrate that the harness can **detect vulnerabilities**, rather than only demonstrating that an application was fixed.
+A major purpose of this project is to demonstrate that the harness can detect vulnerabilities, rather than only demonstrating that an application was fixed.
 
 The same test can be executed against:
 
-* An intentionally vulnerable version
-* A fixed version
-
----
-
-## Vulnerable Version
-
-Example:
-
-```text
+An intentionally vulnerable version
+A fixed version
+Vulnerable Version
 Test
  |
  v
@@ -584,19 +447,11 @@ Unauthorized operation succeeds
  |
  v
 Test identifies vulnerability
-```
 
 Expected result:
 
-```text
 FAIL / VULNERABILITY DETECTED
-```
-
----
-
-## Fixed Version
-
-```text
+Fixed Version
 Test
  |
  v
@@ -610,152 +465,111 @@ State remains unchanged
  |
  v
 Test passes
-```
 
 Expected result:
 
-```text
 PASS
-```
 
-Using the same test against both versions provides reproducible evidence that the harness is actually detecting the authorization issue.
+Running the same test against both versions provides reproducible evidence that the harness is detecting the authorization issue.
 
----
-
-# 19. Example Admin Authorization Test
+19. Example Admin Authorization Test
 
 Suppose the application contains:
 
-```text
 GET /admin/stats
-```
 
 Expected authorization policy:
 
-| Role            | Expected Access |
-| --------------- | --------------- |
-| Unauthenticated | Deny            |
-| Normal User     | Deny            |
-| Admin           | Allow           |
+Role	Expected Access
+Unauthenticated	Deny
+Normal User	Deny
+Admin	Allow
 
 The harness tests:
 
-```text
 Unauthenticated → /admin/stats
 Normal User     → /admin/stats
 Admin           → /admin/stats
-```
 
 Expected:
 
-```text
 Unauthenticated → Denied
 Normal User     → Denied
 Admin           → Allowed
-```
 
-If a normal user receives administrator-only information, the authorization control should be reported as vulnerable.
+If a normal user receives administrator-only information, the test can identify a potential authorization vulnerability.
 
----
-
-# 20. Example Cross-User Test
+20. Example Cross-User Test
 
 Suppose:
 
-```text
 User A → /users/A/orders
 User B → /users/B/orders
-```
 
 The harness tests whether User A can access User B's orders.
 
 Expected:
 
-```text
 User A → User A's orders = Allowed
 User A → User B's orders = Denied
-```
 
 The test should also verify that User B's protected data is not returned.
 
----
-
-# 21. Example State-Change Test
+21. Example State-Change Test
 
 For a modification endpoint:
 
-```text
 PUT /users/B/profile
-```
 
 the test can perform:
 
-```text
 1. Record User B's original profile.
 2. Authenticate as User A.
 3. Attempt to modify User B's profile.
 4. Record the HTTP response.
 5. Retrieve User B's profile.
 6. Compare the state before and after.
-```
 
 Expected secure behavior:
 
-```text
 Request denied
 +
 User B's profile unchanged
-```
-
----
-
-# 22. Reports
+22. Reports
 
 Generated security reports are stored in:
 
-```text
 reports/
-```
 
 The repository contains reports such as:
 
-```text
 live-website_access_control_report.pdf
 website-target-1_access_control_report.pdf
 website-target-2_access_control_report.pdf
-```
 
-The reports provide evidence of the authorization tests performed.
+Reports can provide evidence including:
 
-They can contain information such as:
-
-* Tested endpoints
-* User/role used
-* Expected authorization behavior
-* Actual behavior
-* Test results
-* Detected authorization issues
-* Response validation
-* State validation
-
----
-
-# 23. Recommended Testing Evidence
+Tested endpoints
+User/role used
+Expected authorization behavior
+Actual behavior
+Test results
+Detected authorization issues
+Response validation
+State validation
+23. Recommended Testing Evidence
 
 For each completed security-testing task, maintain:
 
-```text
 1. Test case
 2. Expected result
 3. Actual result
 4. Test output
 5. Generated report
 6. Relevant commit
-```
 
-For example:
+Example:
 
-```text
 Test:
 Normal user attempts to access admin statistics.
 
@@ -767,74 +581,61 @@ Access denied and no administrator data returned.
 
 Evidence:
 reports/website-target-2_access_control_report.pdf
-```
-
----
-
-# 24. Recommended Vulnerable vs Fixed Demonstration
+24. Vulnerable vs Fixed Demonstration
 
 For a complete project demonstration:
 
-### Step 1
+Step 1
 
 Start the intentionally vulnerable target.
 
-### Step 2
+Step 2
 
 Run the access-control test.
 
-### Step 3
+Step 3
 
 Save the test output.
 
-### Step 4
+Step 4
 
 Generate the security report.
 
-### Step 5
+Step 5
 
 Fix the authorization vulnerability.
 
-### Step 6
+Step 6
 
 Run the exact same test again.
 
-### Step 7
+Step 7
 
-Verify:
+Compare the results:
 
-```text
 Vulnerable version → Vulnerability detected
 Fixed version      → Test passes
-```
-
-### Step 8
+Step 8
 
 Keep the reports and test output as evidence.
 
-This demonstrates that the harness is capable of detecting the vulnerability.
+This demonstrates that the harness can detect an authorization vulnerability and verify the behavior after remediation.
 
----
-
-# 25. Security Considerations
+25. Security Considerations
 
 This project is intended for:
 
-* Educational security testing
-* Local security labs
-* Controlled applications
-* Authorized testing
-* Development and testing environments
+Educational security testing
+Local security labs
+Controlled applications
+Authorized testing
+Development and testing environments
 
 Only test systems that you own or have explicit permission to test.
 
 Do not use the harness against third-party applications without authorization.
 
----
-
-# 26. Quick Start
-
-```bash
+26. Quick Start
 git clone https://github.com/Abishiha-9952/access-control-test-harness.git
 
 cd access-control-test-harness
@@ -843,45 +644,34 @@ python3 -m venv venv
 
 source venv/bin/activate
 
-pip install -r requirements.txt
-```
+Start the required target application and configure the required users, roles, target URL, and authorization policy.
 
-Start the required target application, configure the users/roles and target URL, then run:
+Then run:
 
-```bash
 python harness/test_runner.py
-```
 
-Review the generated results and reports under:
+Review the generated results and security reports under:
 
-```text
 reports/
-```
+27. Repository
 
----
-
-# 27. Repository
-
-GitHub:
+GitHub repository:
 
 https://github.com/Abishiha-9952/access-control-test-harness
 
----
+28. Project Goal
 
-# 28. Project Goal
-
-The goal of the **Access-Control Test Harness** is to provide a reproducible method for testing application authorization.
+The goal of the Access-Control Test Harness is to provide a reproducible method for testing application authorization.
 
 The project demonstrates access-control testing through:
 
-* Role-based authorization testing
-* Unauthenticated access testing
-* Cross-user access testing
-* Admin privilege testing
-* Response-data validation
-* Unauthorized state-change validation
-* Vulnerable-versus-fixed testing
-* Generated security reports
+Role-based authorization testing
+Unauthenticated access testing
+Cross-user access testing
+Admin privilege testing
+Response-data validation
+Unauthorized state-change validation
+Vulnerable-versus-fixed testing
+Generated security reports
 
-The key objective is to demonstrate that the harness can **identify unauthorized access and verify whether security controls correctly prevent unauthorized actions**.
-
+The key objective is to demonstrate that the harness can identify unauthorized access and verify whether security controls correctly prevent unauthorized actions.
