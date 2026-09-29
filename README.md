@@ -14,11 +14,11 @@ Access control determines **who is allowed to access a resource or perform an op
 
 Incorrect access-control implementation can allow:
 
-- Unauthenticated users to access protected resources
-- Normal users to access administrator functions
-- One user to access another user's data
-- Unauthorized users to modify another user's resources
-- Sensitive information to be returned to users without permission
+* Unauthenticated users to access protected resources
+* Normal users to access administrator functions
+* One user to access another user's data
+* Unauthorized users to modify another user's resources
+* Sensitive information to be returned to users without permission
 
 The **Access-Control Test Harness** automates authorization testing and provides evidence that can be used to identify and validate access-control issues.
 
@@ -28,16 +28,16 @@ The **Access-Control Test Harness** automates authorization testing and provides
 
 The main objectives of this project are:
 
-- Test authentication and authorization controls
-- Test access based on user roles
-- Detect vertical privilege escalation
-- Detect horizontal privilege escalation
-- Test unauthenticated access to protected endpoints
-- Validate returned response data
-- Verify whether unauthorized modifications actually occur
-- Compare vulnerable and fixed application behavior
-- Generate security-testing reports
-- Provide reproducible evidence of authorization testing
+* Test authentication and authorization controls
+* Test access based on user roles
+* Detect vertical privilege escalation
+* Detect horizontal privilege escalation
+* Test unauthenticated access to protected endpoints
+* Validate returned response data
+* Verify whether unauthorized modifications actually occur
+* Compare vulnerable and fixed application behavior
+* Generate security-testing reports
+* Provide reproducible evidence of authorization testing
 
 ---
 
@@ -183,11 +183,21 @@ access-control-test-harness/
 │   └── test_runner.py
 │
 ├── target1-app/
+│   ├── app.py
+│   └── openapi.yaml
 │
 ├── target2-app/
-│   └── templates/
+│   ├── static/
+│   ├── templates/
+│   └── app.py
 │
 ├── reports/
+│   ├── live-website_access_control_report.html
+│   ├── live-website_access_control_report.pdf
+│   ├── website-target-1_access_control_report.html
+│   ├── website-target-1_access_control_report.pdf
+│   ├── website-target-2_access_control_report.html
+│   └── website-target-2_access_control_report.pdf
 │
 ├── openapi.yaml
 ├── role_matrix.yaml
@@ -209,13 +219,13 @@ It performs the configured access-control tests against the target application.
 
 The tests can validate:
 
-- Authentication requirements
-- User roles
-- Endpoint authorization
-- HTTP responses
-- Response content
-- Protected data
-- Unauthorized state changes
+* Authentication requirements
+* User roles
+* Endpoint authorization
+* HTTP responses
+* Response content
+* Protected data
+* Unauthorized state changes
 
 ---
 
@@ -225,10 +235,10 @@ This component works with OpenAPI/API definitions used by the testing process.
 
 It handles API information such as:
 
-- Endpoints
-- HTTP methods
-- API paths
-- Request information
+* Endpoints
+* HTTP methods
+* API paths
+* Request information
 
 ---
 
@@ -243,17 +253,27 @@ This component prepares access-control test cases using the API information and 
 Provides the module entry point for running the harness where supported.
 
 ---
+
 # 7. OpenAPI File
 
-The project contains an OpenAPI specification used during testing.
+The project contains an OpenAPI specification used during testing:
 
-The project contains an OpenAPI specification used during testing.
-
+```text
 openapi.yaml
+```
 
 The OpenAPI specification describes the API endpoints used by the access-control testing harness.
 
-The OpenAPI specification describes the API endpoints used by the access-control testing harness.
+It provides information such as:
+
+* API paths
+* HTTP methods
+* Parameters
+* Authentication requirements
+* API operations
+
+The OpenAPI specification is used by the testing process to understand the target API and prepare appropriate access-control test cases.
+
 ---
 
 # 8. Role Matrices
@@ -270,11 +290,11 @@ A role matrix describes which operations different users or roles should be allo
 
 Example:
 
-| User Type | Normal Resource | Own Resource | Admin Resource |
-|---|---|---|---|
-| Unauthenticated | Deny | Deny | Deny |
-| Normal User | According to policy | Allow | Deny |
-| Admin | According to policy | Allow | Allow |
+| User Type       | Normal Resource     | Own Resource | Admin Resource |
+| --------------- | ------------------- | ------------ | -------------- |
+| Unauthenticated | Deny                | Deny         | Deny           |
+| Normal User     | According to policy | Allow        | Deny           |
+| Admin           | According to policy | Allow        | Allow          |
 
 The exact permissions depend on the security requirements of the target application.
 
@@ -292,6 +312,14 @@ target1-app/
 
 Target 1 provides an environment for testing access-control behavior.
 
+It contains:
+
+```text
+target1-app/
+├── app.py
+└── openapi.yaml
+```
+
 ---
 
 ## Target 2
@@ -302,10 +330,13 @@ target2-app/
 
 Target 2 provides another controlled environment for testing authorization behavior.
 
-It contains application templates under:
+It contains:
 
 ```text
-target2-app/templates/
+target2-app/
+├── static/
+├── templates/
+└── app.py
 ```
 
 The target applications are intended for local and controlled security testing.
@@ -353,15 +384,9 @@ venv\Scripts\activate
 
 ## Step 3 — Install Dependencies
 
-Install the Python dependencies required by the project and target application.
+The project does not include a `requirements.txt` file.
 
-If a target application contains a `requirements.txt` file, install its dependencies from that target directory:
-
-```bash
-pip install -r requirements.txt
-```
-
-If dependencies are already installed in your environment, this step can be skipped.
+Use the Python environment and packages already required by the project and target applications.
 
 ---
 
@@ -384,10 +409,10 @@ Sensitive credentials should not be committed to GitHub.
 
 Use environment variables or local configuration for:
 
-- Passwords
-- Authentication tokens
-- API keys
-- Other secrets
+* Passwords
+* Authentication tokens
+* API keys
+* Other secrets
 
 ---
 
@@ -401,12 +426,6 @@ For example:
 cd target2-app
 ```
 
-If the target application contains its own dependency file, install the required dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
 For a Flask application, the application may be started using:
 
 ```bash
@@ -416,6 +435,33 @@ python app.py
 The exact host and port depend on the application's configuration.
 
 Verify that the target application is accessible before running the security tests.
+
+If Nginx is part of the local testing environment, start it before performing the tests:
+
+```bash
+sudo systemctl start nginx
+```
+
+Verify the Nginx service:
+
+```bash
+sudo systemctl status nginx
+```
+
+A typical local testing sequence is:
+
+```text
+Start Nginx
+     |
+     v
+Start target application
+     |
+     v
+Verify target application
+     |
+     v
+Run access-control tests
+```
 
 ---
 
@@ -509,9 +555,9 @@ For example:
 
 is useful evidence, but testing should also consider:
 
-- Whether protected data was exposed
-- Whether the requested operation actually occurred
-- Whether application state changed
+* Whether protected data was exposed
+* Whether the requested operation actually occurred
+* Whether application state changed
 
 ---
 
@@ -572,8 +618,8 @@ A major purpose of this project is to demonstrate that the harness can **detect 
 
 The same test can be executed against:
 
-- An intentionally vulnerable version
-- A fixed version
+* An intentionally vulnerable version
+* A fixed version
 
 ---
 
@@ -638,11 +684,11 @@ GET /admin/stats
 
 Expected authorization policy:
 
-| Role | Expected Access |
-|---|---|
-| Unauthenticated | Deny |
-| Normal User | Deny |
-| Admin | Allow |
+| Role            | Expected Access |
+| --------------- | --------------- |
+| Unauthenticated | Deny            |
+| Normal User     | Deny            |
+| Admin           | Allow           |
 
 The harness tests:
 
@@ -723,13 +769,19 @@ The reports provide evidence of the authorization tests performed by the harness
 
 Available reports include:
 
-- `live-website_access_control_report.pdf` — Access-control testing report for the live test target.
-- `website-target-1_access_control_report.pdf` — Access-control testing report for Target 1.
-- `website-target-2_access_control_report.pdf` — Access-control testing report for Target 2.
+* `live-website_access_control_report.pdf` — Access-control testing report for the live test target.
+* `website-target-1_access_control_report.pdf` — Access-control testing report for Target 1.
+* `website-target-2_access_control_report.pdf` — Access-control testing report for Target 2.
 
-HTML versions of the reports are also provided where available.
+HTML versions of the reports are also provided:
+
+* `live-website_access_control_report.html`
+* `website-target-1_access_control_report.html`
+* `website-target-2_access_control_report.html`
 
 These reports are included as project evidence and are intended to support reproducibility and mentor/project review.
+
+---
 
 # 23. Recommended Testing Evidence
 
@@ -772,25 +824,33 @@ Start the intentionally vulnerable target.
 
 ### Step 2
 
-Run the access-control test.
+If Nginx is used by the local testing environment, start Nginx:
+
+```bash
+sudo systemctl start nginx
+```
 
 ### Step 3
 
-Save the test output.
+Run the access-control test.
 
 ### Step 4
 
-Generate the security report.
+Save the test output.
 
 ### Step 5
 
-Fix the authorization vulnerability.
+Generate the security report.
 
 ### Step 6
 
-Run the exact same test again.
+Fix the authorization vulnerability.
 
 ### Step 7
+
+Run the exact same test again.
+
+### Step 8
 
 Compare the results:
 
@@ -799,7 +859,7 @@ Vulnerable version → Vulnerability detected
 Fixed version      → Test passes
 ```
 
-### Step 8
+### Step 9
 
 Keep the reports and test output as evidence.
 
@@ -811,11 +871,11 @@ This demonstrates that the harness can detect an authorization vulnerability and
 
 This project is intended for:
 
-- Educational security testing
-- Local security labs
-- Controlled applications
-- Authorized testing
-- Development and testing environments
+* Educational security testing
+* Local security labs
+* Controlled applications
+* Authorized testing
+* Development and testing environments
 
 Only test systems that you own or have explicit permission to test.
 
@@ -825,22 +885,57 @@ Do not use the harness against third-party applications without authorization.
 
 # 26. Quick Start
 
+Clone the repository:
+
 ```bash
 git clone https://github.com/Abishiha-9952/access-control-test-harness.git
+```
 
+Enter the project:
+
+```bash
 cd access-control-test-harness
+```
 
+Create and activate the virtual environment:
+
+```bash
 python3 -m venv venv
-
 source venv/bin/activate
 ```
 
-Start the required target application and configure the required users, roles, target URL, and authorization policy.
-
-Then run:
+Start Nginx if it is required by the local testing environment:
 
 ```bash
+sudo systemctl start nginx
+```
+
+Verify Nginx:
+
+```bash
+sudo systemctl status nginx
+```
+
+Start the required target application.
+
+For example:
+
+```bash
+cd target2-app
+python app.py
+```
+
+Return to the project root and run the harness:
+
+```bash
+cd ..
 python harness/test_runner.py
+```
+
+If supported:
+
+```bash
+python -m harness
 ```
 
 Review the generated results and security reports under:
@@ -865,13 +960,13 @@ The goal of the **Access-Control Test Harness** is to provide a reproducible met
 
 The project demonstrates access-control testing through:
 
-- Role-based authorization testing
-- Unauthenticated access testing
-- Cross-user access testing
-- Admin privilege testing
-- Response-data validation
-- Unauthorized state-change validation
-- Vulnerable-versus-fixed testing
-- Generated security reports
+* Role-based authorization testing
+* Unauthenticated access testing
+* Cross-user access testing
+* Admin privilege testing
+* Response-data validation
+* Unauthorized state-change validation
+* Vulnerable-versus-fixed testing
+* Generated security reports
 
 The key objective is to demonstrate that the harness can **identify unauthorized access and verify whether security controls correctly prevent unauthorized actions**.
