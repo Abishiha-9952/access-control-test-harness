@@ -190,7 +190,6 @@ access-control-test-harness/
 ├── reports/
 │
 ├── openapi.yaml
-├── openapi_test.yaml
 ├── role_matrix.yaml
 ├── role_matrix_target1.yaml
 ├── role_matrix_target2.yaml
@@ -244,18 +243,17 @@ This component prepares access-control test cases using the API information and 
 Provides the module entry point for running the harness where supported.
 
 ---
+# 7. OpenAPI File
 
-# 7. OpenAPI Files
+The project contains an OpenAPI specification used during testing.
 
-The project contains OpenAPI specifications used during testing:
+The project contains an OpenAPI specification used during testing.
 
-```text
 openapi.yaml
-openapi_test.yaml
-```
 
-These files describe API endpoints and information required by the testing process.
+The OpenAPI specification describes the API endpoints used by the access-control testing harness.
 
+The OpenAPI specification describes the API endpoints used by the access-control testing harness.
 ---
 
 # 8. Role Matrices
