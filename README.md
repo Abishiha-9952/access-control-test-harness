@@ -11,7 +11,7 @@ The project builds on the concept of manual access control testing and extends i
 
 My contribution focuses on developing the **candidate policy inference and automated test generation** components.
 
-The purpose of this contribution is to convert manually defined access control testing concepts into automatically generated security test cases.
+The purpose of this contribution is to extend manual access control testing into an automated and reusable test-generation approach.
 
 ### Main Contributions
 
