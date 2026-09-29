@@ -47,6 +47,3 @@ Discovered Endpoints + Actors
               v
        Generated Test
           Cases
-              |
-              v
-       Test Execution
